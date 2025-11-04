@@ -1,5 +1,4 @@
-aiogram==3.22.0
+aiogram==3.10.0
+aiohttp==3.9.5
 geopy==2.4.1
 python-dotenv==1.0.1
-Pillow==10.0.0
-aiohttp
