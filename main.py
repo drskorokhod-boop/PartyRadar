@@ -287,6 +287,7 @@ def banners_in_region(center_lat: float, center_lon: float, banners: List[dict],
 async def start_cmd(m: types.Message):
     # show banner if any
     users = _load_users()
+    print("Files in current directory:", os.listdir("."))
     user = users.get(str(m.from_user.id), {})
     banners = _load_banners()
     banner = None
