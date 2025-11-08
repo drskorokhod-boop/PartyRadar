@@ -27,7 +27,7 @@ import traceback
 # ===================== CONFIG =====================
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-assert TOKEN, BOT_TOKEN отсутствует в .env"
+assert TOKEN, "BOT_TOKEN отсутствует в .env"
 
 CRYPTOCLOUD_API_KEY = os.getenv(\"CRYPTOCLOUD_API_KEY\", \"\").strip()
 CRYPTOCLOUD_SHOP_ID = os.getenv(\"CRYPTOCLOUD_SHOP_ID\", \"\").strip()
