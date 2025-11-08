@@ -354,29 +354,40 @@ def random_banner_for_user(user_data: dict, banners: List[dict]) -> Optional[dic
 # ===================== START =====================
 @dp.message(CommandStart())
 async def start_cmd(m: Message):
-    # логотип
+    # Попытка отправить логотип при старте
     for ext in ("png", "jpg", "jpeg"):
         p = BASE_DIR / f"logo.{ext}"
         if p.exists():
             try:
-                await m.answer_photo(InputFile(p), caption=" ")
+                await m.answer_photo(InputFile(p), caption="👋 Добро пожаловать в PartyRadar!")
             except Exception:
                 pass
             break
+    else:
+        await m.answer("👋 Добро пожаловать в PartyRadar!")
 
-    # баннер по региону, если есть
-    users = _load_users()
-    user_data = users.get(str(m.from_user.id), {})
+    # Баннер по региону, если есть
+    user_data = users_get(str(m.from_user.id), {})
     banners = _load_banners()
-    banner = random_banner_for_user(user_data, banners)
-    if banner:
-        cap = (banner.get("text") or "Рекламный баннер").strip()
-        url = (banner.get("url") or "").strip()
-        cap_full = (cap + ("\n" + url if url else "")).strip()
-        if banner.get("media_type") == "photo":
-            await m.answer_photo(banner["file_id"], caption=cap_full)
-        elif banner.get("media_type") == "video":
-            await m.answer_video(banner["file_id"], caption=cap_full)
+    if banners:
+        banner = random_banner_for_user(user_data, banners)
+        if banner:
+            url = (banner.get("url") or "").strip()
+            cap = (banner.get("text") or "").strip()
+            cap_full = (cap + ("\n" + url if url else "")).strip()
+            if banner.get("media_type") == "photo":
+                await m.answer_photo(banner["file_id"], caption=cap_full)
+            elif banner.get("media_type") == "video":
+                await m.answer_video(banner["file_id"], caption=cap_full)
+
+    # Приветствие
+    welcome = (
+        "🎉 Добро пожаловать в <b>PartyRadar</b>!\n\n"
+        "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам!\n"
+        "📍 Объявления живут 24–48 часов бесплатно.\n"
+        "💎 Можно выбрать платный срок, ТОП или Push — всё на твой выбор."
+    )
+    await m.answer(welcome, reply_markup=kb_main())
 
     welcome = (
         "👋 Добро пожаловать в <b>PartyRadar</b>!\n\n"
