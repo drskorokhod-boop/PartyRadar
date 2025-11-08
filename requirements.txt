@@ -1,4 +1,4 @@
-aiogram
+aiogram==3.10.0
 aiohttp
 python-dotenv
 geopy
