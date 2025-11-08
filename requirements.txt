@@ -1,4 +1,4 @@
 aiogram==3.10.0
-aiohttp
-python-dotenv
-geopy
+aiohttp==3.9.5
+python-dotenv==1.0.1
+geopy==2.4.1
