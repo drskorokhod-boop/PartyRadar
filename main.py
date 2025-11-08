@@ -1108,12 +1108,29 @@ async def global_back(m: Message, state: FSMContext):
 async def fallback(m: Message):
     await m.answer("Я не понял команду. Используй кнопки ниже 👇", reply_markup=kb_main())
 
-# ===================== RUN =====================
+# =================== RUN ===================
+
+import os
+import asyncio
+import logging
+
 async def main():
-    logging.info("✅ PartyRadar запущен…")
+    logging.info("✅ PartyRadar запущен...")
     asyncio.create_task(push_daemon())
     asyncio.create_task(cleanup_daemon())
     await dp.start_polling(bot)
 
+async def safe_run():
+    while True:
+        try:
+            await main()
+        except Exception as e:
+            logging.error(f"❌ Polling crashed: {e}")
+            await asyncio.sleep(5)
+            logging.info("♻️ Restarting polling...")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(safe_run())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("🛑 Bot stopped manually.")
