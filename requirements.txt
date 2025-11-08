@@ -1,6 +1,4 @@
-aiogram==3.10.0
+git+https://github.com/aiogram/aiogram.git@v3.10.0
 aiohttp==3.9.5
 python-dotenv==1.0.1
 geopy==2.4.1
-
-# rebuild
