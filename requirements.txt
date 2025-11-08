@@ -3,3 +3,4 @@ aiohttp==3.8.5
 python-dotenv==1.0.1
 geopy==2.4.1
 pydantic==1.10.12
+python-telegram-bot==13.15
