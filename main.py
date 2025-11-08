@@ -29,9 +29,9 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 assert TOKEN, "BOT_TOKEN отсутствует в .env"
 
-CRYPTOCLOUD_API_KEY = os.getenv(\"CRYPTOCLOUD_API_KEY\", \"\").strip()
-CRYPTOCLOUD_SHOP_ID = os.getenv(\"CRYPTOCLOUD_SHOP_ID\", \"\").strip()
-ADMIN_ID = int(os.getenv(\"ADMIN_ID\", \"0\"))
+CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY", "").strip()
+CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID", "").strip()
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(TOKEN)
