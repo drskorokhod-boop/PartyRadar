@@ -1,60 +1,62 @@
-from __future__ import annotations
-
+# -*- coding: utf-8 -*-
 import asyncio
 import json
 import logging
 import os
 import random
-from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict, Any, List
 
+import aiohttp
 from geopy.distance import geodesic
+
 from aiogram import Bot, Dispatcher, F
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command
-from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.enums import ParseMode
 from aiogram.types import (
     Message, CallbackQuery,
     ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton,
-    FSInputFile, InputFile,
-    InputMediaPhoto, InputMediaVideo,
+    FSInputFile, InputMediaPhoto, InputMediaVideo,
     ContentType
 )
+from aiogram.utils.markdown import escape_html
 from dotenv import load_dotenv
-import aiohttp
 
 # ===================== CONFIG =====================
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN", "").strip()
-assert TOKEN, "❌ BOT_TOKEN отсутствует в окружении"
+TOKEN = os.getenv("BOT_TOKEN")
+assert TOKEN, "❌ BOT_TOKEN отсутствует в .env"
 
 CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY", "").strip()
 CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID", "").strip()
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+
+# Необязательные
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or 0)
 
 logging.basicConfig(level=logging.INFO)
-bot = Bot(TOKEN)
+bot = Bot(TOKEN)  # без parse_mode здесь (aiogram>=3.10)
 dp = Dispatcher(storage=MemoryStorage())
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR: Path = Path(__file__).resolve().parent
+
+# Файлы хранилища
 EVENTS_FILE = BASE_DIR / "events.json"
 BANNERS_FILE = BASE_DIR / "banners.json"
 USERS_FILE = BASE_DIR / "users.json"
 PAYMENTS_FILE = BASE_DIR / "payments.json"
 
+# Базовые настройки
 DEFAULT_RADIUS_KM = 30
-PUSH_LEAD_HOURS = 2
-MAX_MEDIA = 3
-
-# ---------- БАННЕРНЫЕ СЛОТЫ ----------
+BANNER_REGION_RADIUS_KM = 30
 MAX_BANNERS_PER_REGION = 3
-BANNER_REGION_RADIUS_KM = 30  # кластер региона для баннеров
+PUSH_LEAD_HOURS = 2
 
-# ---------- PRICES (USD) ----------
+# Цены (USD)
 PRICES = {
     "extend_48h": 1.0,
     "extend_week": 3.0,
@@ -65,6 +67,7 @@ PRICES = {
     "banner_month": 30.0,
 }
 
+# Выбор сроков (часы)
 LIFETIME_OPTIONS = {
     "🕐 24 часа (бесплатно)": 24,
     "📅 48 часов": 48,
@@ -77,48 +80,165 @@ TARIFFS_USD = {
     336: PRICES["extend_2week"]
 }
 
-# ===================== STORAGE HELPERS =====================
-def _ensure_file(path: Path, default):
+
+# ===================== HELPERS =====================
+def safe(text: Optional[str]) -> str:
+    return escape_html(text or "")
+
+
+def _ensure_file(path: Path, default_obj: Any):
     if not path.exists():
-        path.write_text(json.dumps(default, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(json.dumps(default_obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
-def _load_json(path: Path, default):
+
+def _load_json(path: Path, default_obj: Any) -> Any:
     try:
-        if not path.exists():
-            return default
-        return json.loads(path.read_text(encoding="utf-8"))
+        _ensure_file(path, default_obj)
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
-        return default
+        return default_obj
 
-def _save_json(path: Path, data):
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
 
-_ensure_file(EVENTS_FILE, {"events": []})
-_ensure_file(BANNERS_FILE, {"banners": []})
-_ensure_file(USERS_FILE, {"users": {}})
-_ensure_file(PAYMENTS_FILE, {"payments": []})
+def _save_json(path: Path, data: Any):
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-def _load_events(): return _load_json(EVENTS_FILE, {"events": []})["events"]
-def _save_events(arr): _save_json(EVENTS_FILE, {"events": arr})
-def _load_banners(): return _load_json(BANNERS_FILE, {"banners": []})["banners"]
-def _save_banners(arr): _save_json(BANNERS_FILE, {"banners": arr})
-def _load_users(): return _load_json(USERS_FILE, {"users": {}})["users"]
-def _save_users(users): _save_json(USERS_FILE, {"users": users})
-def _load_payments(): return _load_json(PAYMENTS_FILE, {"payments": []})["payments"]
-def _save_payments(pay): _save_json(PAYMENTS_FILE, {"payments": pay})
+
+def _doc_events() -> Dict[str, Any]:
+    # { "events": [ { ... } ] }
+    return _load_json(EVENTS_FILE, {"events": []})
+
+
+def _save_doc_events(d: Dict[str, Any]):
+    _save_json(EVENTS_FILE, d)
+
+
+def _doc_banners() -> Dict[str, Any]:
+    # { "banners": [ { ... } ] }
+    return _load_json(BANNERS_FILE, {"banners": []})
+
+
+def _save_doc_banners(d: Dict[str, Any]):
+    _save_json(BANNERS_FILE, d)
+
+
+def _doc_users() -> Dict[str, Any]:
+    # { "<user_id>": { "last_location": {"lat":..., "lon":...}, "last_seen": iso } }
+    return _load_json(USERS_FILE, {})
+
+
+def _save_doc_users(d: Dict[str, Any]):
+    _save_json(USERS_FILE, d)
+
+
+def _doc_payments() -> Dict[str, Any]:
+    # { "payments": [ { "uuid":..., "type": "...", "user":..., "ev_id":..., "amount":... } ] }
+    return _load_json(PAYMENTS_FILE, {"payments": []})
+
+
+def _save_doc_payments(d: Dict[str, Any]):
+    _save_json(PAYMENTS_FILE, d)
+
+
+def next_id(items: List[dict]) -> int:
+    return (items[-1]["id"] + 1) if items else 1
+
+
+def format_event_card(ev: dict) -> str:
+    dt = datetime.fromisoformat(ev["datetime"])
+    desc = f"\n📝 {safe(ev.get('description'))}" if ev.get("description") else ""
+    contact = f"\n☎ <b>Контакт:</b> {safe(ev.get('contact'))}" if ev.get("contact") else ""
+    top = " 🔥<b>ТОП</b>" if ev.get("is_top") else ""
+    return (
+        f"📌 <b>{safe(ev.get('title'))}</b>{top}\n"
+        f"📍 {safe(ev.get('category'))}{desc}\n"
+        f"📅 {dt.strftime('%d.%m.%Y %H:%M')}{contact}"
+    )
+
+
+def banners_in_region(center_lat: float, center_lon: float, banners: List[dict], now: datetime) -> List[dict]:
+    active = []
+    for b in banners:
+        try:
+            exp = b.get("expire")
+            if exp and datetime.fromisoformat(exp) <= now:
+                continue
+        except Exception:
+            continue
+        if b.get("lat") is None or b.get("lon") is None:
+            continue
+        d = geodesic((center_lat, center_lon), (b["lat"], b["lon"])).km
+        if d <= BANNER_REGION_RADIUS_KM:
+            active.append(b)
+    return active
+
+
+def random_banner_for_user(user_data: dict, banners: List[dict]) -> Optional[dict]:
+    now = datetime.now()
+    loc = user_data.get("last_location") if user_data else None
+    if loc:
+        region_b = banners_in_region(loc["lat"], loc["lon"], banners, now)
+        if region_b:
+            return random.choice(region_b)
+    # fallback: глобальные
+    glob = [b for b in banners if (not b.get("lat") and not b.get("lon"))]
+    if glob:
+        return random.choice(glob)
+    return None
+
+
+async def send_event_media(chat_id: int, ev: dict):
+    text = format_event_card(ev)
+    map_g = f"https://www.google.com/maps?q={ev['lat']},{ev['lon']}"
+    map_tg = f"https://t.me/share/url?url={map_g}"
+    ikb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📍 Telegram", url=map_tg),
+        InlineKeyboardButton(text="🌐 Google Maps", url=map_g)
+    ]])
+
+    media = ev.get("media_files") or []
+    # локальные файлы (логотип) — превращаем в FSInputFile
+    fixed_media = []
+    for f in media:
+        if f.get("is_local"):
+            fixed_media.append({"type": f["type"], "file_id": FSInputFile(str(BASE_DIR / f["file_id"]))})
+        else:
+            fixed_media.append(f)
+
+    if len(fixed_media) > 1:
+        group = []
+        for i, f in enumerate(fixed_media):
+            caption = text if i == 0 else None
+            if f["type"] == "photo":
+                group.append(InputMediaPhoto(media=f["file_id"], caption=caption, parse_mode=ParseMode.HTML))
+            elif f["type"] == "video":
+                group.append(InputMediaVideo(media=f["file_id"], caption=caption, parse_mode=ParseMode.HTML))
+        await bot.send_media_group(chat_id, group)
+        await bot.send_message(chat_id, "🗺 <b>Локация:</b>", reply_markup=ikb, parse_mode=ParseMode.HTML)
+    elif len(fixed_media) == 1:
+        f = fixed_media[0]
+        if f["type"] == "photo":
+            await bot.send_photo(chat_id, f["file_id"], caption=text, reply_markup=ikb, parse_mode=ParseMode.HTML)
+        elif f["type"] == "video":
+            await bot.send_video(chat_id, f["file_id"], caption=text, reply_markup=ikb, parse_mode=ParseMode.HTML)
+    else:
+        await bot.send_message(chat_id, text, reply_markup=ikb, parse_mode=ParseMode.HTML)
+
 
 # ===================== CRYPTOCLOUD =====================
-CC_API = "https://api.cryptocloud.plus"
-
 async def cc_create_invoice(amount_usd: float, order_id: str, description: str) -> Tuple[Optional[str], Optional[str]]:
     """
-    Возвращает (link, uuid) или (None, None) при ошибке
+    Создать счёт в CryptoCloud. Возвращает (link, uuid) или (None, None).
     """
     if not CRYPTOCLOUD_API_KEY or not CRYPTOCLOUD_SHOP_ID:
         return None, None
-    headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}", "Content-Type": "application/json"}
+
+    url = "https://api.cryptocloud.plus/v2/invoice/create"
+    headers = {
+        "Authorization": f"Token {CRYPTOCLOUD_API_KEY}",
+        "Content-Type": "application/json"
+    }
     payload = {
         "shop_id": CRYPTOCLOUD_SHOP_ID,
         "amount": float(amount_usd),
@@ -129,56 +249,36 @@ async def cc_create_invoice(amount_usd: float, order_id: str, description: str) 
     }
     try:
         async with aiohttp.ClientSession() as s:
-            async with s.post(f"{CC_API}/v2/invoice/create", headers=headers, json=payload, timeout=30) as resp:
+            async with s.post(url, headers=headers, json=payload, timeout=30) as resp:
                 data = await resp.json()
                 link = data.get("result", {}).get("link")
                 uuid = data.get("result", {}).get("uuid")
                 return link, uuid
     except Exception as e:
-        logging.exception(f"cc_create_invoice error: {e}")
+        logging.exception(f"CryptoCloud create error: {e}")
     return None, None
 
-async def cc_is_paid(uuid: str) -> bool:
+
+async def cc_is_paid(invoice_uuid: str) -> bool:
+    """
+    Проверка статуса счёта. True если оплачен.
+    """
+    if not (CRYPTOCLOUD_API_KEY and invoice_uuid):
+        return False
+    url = f"https://api.cryptocloud.plus/v2/invoice/info/{invoice_uuid}"
+    headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
     try:
-        headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
         async with aiohttp.ClientSession() as s:
-            async with s.get(f"{CC_API}/v2/invoice/info/{uuid}", headers=headers, timeout=30) as resp:
+            async with s.get(url, headers=headers, timeout=30) as resp:
                 data = await resp.json()
-                status = str(data.get("result", {}).get("status", "")).lower()
-                return status == "paid"
+                status = (data.get("result", {}) or {}).get("status", "")
+                return str(status).lower() == "paid"
     except Exception as e:
-        logging.exception(f"cc_is_paid error: {e}")
+        logging.exception(f"CryptoCloud check error: {e}")
         return False
 
-def _payments_add(user_id: int, uuid: str, order_id: str, kind: str, meta: dict, amount: float):
-    arr = _load_payments()
-    arr.append({
-        "user_id": user_id,
-        "uuid": uuid,
-        "order_id": order_id,
-        "kind": kind,  # lifetime/top/push/banner
-        "meta": meta,  # что продлеваем / какой эвент / баннер
-        "amount": amount,
-        "status": "pending",
-        "ts": datetime.utcnow().isoformat()
-    })
-    _save_payments(arr)
 
-def _payments_get_pending(user_id: int) -> Optional[dict]:
-    arr = _load_payments()
-    pending = [p for p in arr if p["user_id"] == user_id and p["status"] == "pending"]
-    return pending[-1] if pending else None
-
-def _payments_mark_paid(uuid: str):
-    arr = _load_payments()
-    for p in arr:
-        if p["uuid"] == uuid:
-            p["status"] = "paid"
-            p["paid_at"] = datetime.utcnow().isoformat()
-            break
-    _save_payments(arr)
-
-# ===================== FSM СОБЫТИЙ =====================
+# ===================== FSM =====================
 class AddEvent(StatesGroup):
     title = State()
     description = State()
@@ -192,6 +292,7 @@ class AddEvent(StatesGroup):
     upsell = State()
     pay_option = State()
 
+
 class AddBanner(StatesGroup):
     media = State()
     url = State()
@@ -199,7 +300,8 @@ class AddBanner(StatesGroup):
     duration = State()
     payment = State()
 
-# ===================== КЛАВИАТУРЫ =====================
+
+# ===================== KEYBOARDS =====================
 def kb_main():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -211,8 +313,13 @@ def kb_main():
         resize_keyboard=True
     )
 
+
 def kb_back():
-    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅ Назад")]], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅ Назад")]],
+        resize_keyboard=True
+    )
+
 
 def kb_categories():
     return ReplyKeyboardMarkup(
@@ -225,6 +332,7 @@ def kb_categories():
         resize_keyboard=True
     )
 
+
 def kb_media_step():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -233,6 +341,7 @@ def kb_media_step():
         ],
         resize_keyboard=True
     )
+
 
 def kb_lifetime():
     return ReplyKeyboardMarkup(
@@ -244,6 +353,7 @@ def kb_lifetime():
         resize_keyboard=True
     )
 
+
 def kb_payment():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -254,148 +364,72 @@ def kb_payment():
         resize_keyboard=True
     )
 
+
 def kb_upsell():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="⭐ Разместить в ТОП (7 дней)"), KeyboardButton(text="📡 Push-уведомление (30 км)")],
+            [KeyboardButton(text="⭐ Разместить в ТОП (7 дней)"),
+             KeyboardButton(text="📡 Push-уведомление (30 км)")],
             [KeyboardButton(text="🌍 Разместить бесплатно (без опций)")],
             [KeyboardButton(text="⬅ Назад")]
         ],
         resize_keyboard=True
     )
 
+
 def kb_banner_duration():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🗓 Баннер на 7 дней"), KeyboardButton(text="📅 Баннер на месяц")],
+            [KeyboardButton(text="🗓 Баннер на 7 дней"),
+             KeyboardButton(text="📅 Баннер на месяц")],
             [KeyboardButton(text="⬅ Назад")]
         ],
         resize_keyboard=True
     )
 
-# ===================== HELPERS =====================
-def format_event_card(ev: dict) -> str:
-    dt = datetime.fromisoformat(ev["datetime"])
-    desc = f"\n📝 {ev['description']}" if ev.get("description") else ""
-    contact = f"\n☎ <b>Контакт:</b> {ev['contact']}" if ev.get("contact") else ""
-    top = " 🔥<b>ТОП</b>" if ev.get("is_top") else ""
-    return (
-        f"📌 <b>{ev['title']}</b>{top}\n"
-        f"📍 {ev['category']}{desc}\n"
-        f"📅 {dt.strftime('%d.%m.%Y %H:%M')}{contact}"
-    )
-
-async def send_event_media(chat_id: int, ev: dict, extra_kb=None):
-    text = format_event_card(ev)
-    map_g = f"https://www.google.com/maps?q={ev['lat']},{ev['lon']}"
-    map_tg = f"https://t.me/share/url?url={map_g}"
-    ikb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📍 Telegram", url=map_tg),
-        InlineKeyboardButton(text="🌐 Google Maps", url=map_g)
-    ]])
-    media = ev.get("media_files") or []
-    for f in media:
-        if f.get("is_local"):
-            f["file_id"] = FSInputFile(f["file_id"])
-    if len(media) > 1:
-        group = []
-        for i, f in enumerate(media):
-            caption = text if i == 0 else None
-            if f["type"] == "photo":
-                group.append(InputMediaPhoto(media=f["file_id"], caption=caption, parse_mode="HTML"))
-            elif f["type"] == "video":
-                group.append(InputMediaVideo(media=f["file_id"], caption=caption, parse_mode="HTML"))
-        await bot.send_media_group(chat_id, group)
-        await bot.send_message(chat_id, "🗺 <b>Локация:</b>", reply_markup=ikb, parse_mode="HTML")
-    elif len(media) == 1:
-        f = media[0]
-        if f["type"] == "photo":
-            await bot.send_photo(chat_id, f["file_id"], caption=text, reply_markup=ikb, parse_mode="HTML")
-        elif f["type"] == "video":
-            await bot.send_video(chat_id, f["file_id"], caption=text, reply_markup=ikb, parse_mode="HTML")
-    else:
-        await bot.send_message(chat_id, text, reply_markup=ikb, parse_mode="HTML")
-
-def banners_in_region(center_lat: float, center_lon: float, banners: List[dict], now: datetime) -> List[dict]:
-    active = []
-    for b in banners:
-        try:
-            if datetime.fromisoformat(b["expire"]) <= now:
-                continue
-        except Exception:
-            continue
-        if b.get("lat") is None or b.get("lon") is None:
-            continue
-        d = geodesic((center_lat, center_lon), (b["lat"], b["lon"])).km
-        if d <= BANNER_REGION_RADIUS_KM:
-            active.append(b)
-    return active
-
-def random_banner_for_user(user_data: dict, banners: List[dict]) -> Optional[dict]:
-    now = datetime.now()
-    loc = user_data.get("last_location") if user_data else None
-    if loc:
-        region_banners = banners_in_region(loc["lat"], loc["lon"], banners, now)
-        if region_banners:
-            return random.choice(region_banners)
-    global_candidates = []
-    for b in banners:
-        try:
-            if datetime.fromisoformat(b["expire"]) <= now:
-                continue
-        except Exception:
-            continue
-        if str(b.get("region", "")).lower() == "global":
-            global_candidates.append(b)
-    if global_candidates:
-        return random.choice(global_candidates)
-    return None
 
 # ===================== START =====================
 @dp.message(CommandStart())
-async def start_cmd(m: Message):
-    # Попытка отправить логотип при старте
+async def start_cmd(m: Message, state: FSMContext):
+    await state.clear()
+
+    # 1) Логотип всегда (если есть в корне)
+    sent_logo = False
     for ext in ("png", "jpg", "jpeg"):
         p = BASE_DIR / f"logo.{ext}"
         if p.exists():
             try:
-                await m.answer_photo(InputFile(p), caption="👋 Добро пожаловать в PartyRadar!")
-            except Exception:
-                pass
-            break
-    else:
+                await m.answer_photo(FSInputFile(str(p)), caption="👋 Добро пожаловать в PartyRadar!")
+                sent_logo = True
+                break
+            except Exception as e:
+                logging.warning(f"Logo send failed: {e}")
+    if not sent_logo:
         await m.answer("👋 Добро пожаловать в PartyRadar!")
 
-    # Баннер по региону, если есть
-    user_data = users_get(str(m.from_user.id), {})
-    banners = _load_banners()
-    if banners:
-        banner = random_banner_for_user(user_data, banners)
-        if banner:
-            url = (banner.get("url") or "").strip()
-            cap = (banner.get("text") or "").strip()
-            cap_full = (cap + ("\n" + url if url else "")).strip()
-            if banner.get("media_type") == "photo":
-                await m.answer_photo(banner["file_id"], caption=cap_full)
-            elif banner.get("media_type") == "video":
-                await m.answer_video(banner["file_id"], caption=cap_full)
+    # 2) Баннер региона (если есть активные)
+    users = _doc_users()
+    user_data = users.get(str(m.from_user.id), {})
+    banners_doc = _doc_banners()
+    banner = random_banner_for_user(user_data, banners_doc.get("banners", []))
+    if banner:
+        url = (banner.get("url") or "").strip()
+        cap = (banner.get("text") or "").strip()
+        cap_full = (cap + ("\n" + url if url else "")).strip()
+        if banner.get("media_type") == "photo":
+            await m.answer_photo(banner["file_id"], caption=cap_full)
+        elif banner.get("media_type") == "video":
+            await m.answer_video(banner["file_id"], caption=cap_full)
 
-    # Приветствие
+    # 3) Приветствие и меню
     welcome = (
         "🎉 Добро пожаловать в <b>PartyRadar</b>!\n\n"
-        "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам!\n"
-        "📍 Объявления живут 24–48 часов бесплатно.\n"
-        "💎 Можно выбрать платный срок, ТОП или Push — всё на твой выбор."
+        "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам, спорт и многое другое.\n\n"
+        "⏳ Объявления живут <b>24 часа бесплатно</b>.\n"
+        "💳 Можно выбрать платный срок, ТОП или Push — всё на автомате."
     )
-    await m.answer(welcome, reply_markup=kb_main())
+    await m.answer(welcome, reply_markup=kb_main(), parse_mode=ParseMode.HTML)
 
-    welcome = (
-        "👋 Добро пожаловать в <b>PartyRadar</b>!\n\n"
-        "🎉 Находи и создавай события: вечеринки, свидания, встречи по интересам, спорт и многое другое.\n\n"
-        "📌 Объявления живут 24 часа бесплатно.\n"
-        "💰 Можно выбрать платный срок, ТОП и Push при создании — всё на автомате."
-    )
-    await m.answer(welcome, reply_markup=kb_main())
 
 # ===================== ТАРИФЫ =====================
 @dp.message(F.text == "💰 Тарифы и продвижение")
@@ -410,15 +444,17 @@ async def show_tariffs(m: Message):
         f"⭐ ТОП 7 дней — ${PRICES['top_week']}\n"
         f"📡 Push (30 км) — ${PRICES['push']}\n"
         f"🖼 Баннер 7 дней — ${PRICES['banner_week']} / месяц — ${PRICES['banner_month']}\n\n"
-        "Оплата: счёт в USD через CryptoCloud (TON/USDT, авто-конверсия)."
+        "Оплата: счёт в USD через CryptoCloud → оплата TON/USDT, авто-конверсия."
     )
-    await m.answer(text)
+    await m.answer(text, parse_mode=ParseMode.HTML)
+
 
 # ===================== СОЗДАНИЕ СОБЫТИЯ =====================
 @dp.message(F.text == "➕ Создать событие")
 async def create_start(m: Message, state: FSMContext):
     await state.set_state(AddEvent.title)
-    await m.answer("📝 Введи <b>название</b> события:", reply_markup=kb_back())
+    await m.answer("📝 Введи <b>название</b> события:", reply_markup=kb_back(), parse_mode=ParseMode.HTML)
+
 
 @dp.message(AddEvent.title)
 async def step_title(m: Message, state: FSMContext):
@@ -427,7 +463,8 @@ async def step_title(m: Message, state: FSMContext):
         return await m.answer("Главное меню:", reply_markup=kb_main())
     await state.update_data(title=m.text.strip())
     await state.set_state(AddEvent.description)
-    await m.answer("🧾 Введи <b>описание</b> события:", reply_markup=kb_back())
+    await m.answer("🧾 Введи <b>описание</b> события:", reply_markup=kb_back(), parse_mode=ParseMode.HTML)
+
 
 @dp.message(AddEvent.description)
 async def step_description(m: Message, state: FSMContext):
@@ -438,6 +475,7 @@ async def step_description(m: Message, state: FSMContext):
     await state.set_state(AddEvent.category)
     await m.answer("🧭 Выбери категорию:", reply_markup=kb_categories())
 
+
 @dp.message(AddEvent.category)
 async def step_category(m: Message, state: FSMContext):
     if m.text == "⬅ Назад":
@@ -445,8 +483,9 @@ async def step_category(m: Message, state: FSMContext):
         return await m.answer("🧾 Введи описание события:", reply_markup=kb_back())
     await state.update_data(category=m.text.strip())
     await state.set_state(AddEvent.dt)
-    await m.answer("📆 Введи дату и время в формате <b>ДД.ММ.ГГГГ ЧЧ:ММ</b>\nПример: 25.10.2025 19:30",
-                   reply_markup=kb_back())
+    await m.answer("📆 Введи дату и время в формате <b>ДД.ММ.ГГГГ ЧЧ:ММ</b>\nПример: 25.12.2025 19:30",
+                   reply_markup=kb_back(), parse_mode=ParseMode.HTML)
+
 
 @dp.message(AddEvent.dt)
 async def step_datetime(m: Message, state: FSMContext):
@@ -458,31 +497,37 @@ async def step_datetime(m: Message, state: FSMContext):
         if dt <= datetime.now():
             return await m.answer("⚠ Нельзя указывать прошедшее время.", reply_markup=kb_back())
     except ValueError:
-        return await m.answer("⚠ Неверный формат. Пример: 25.10.2025 19:30", reply_markup=kb_back())
+        return await m.answer("⚠ Неверный формат. Пример: 25.12.2025 19:30", reply_markup=kb_back())
     await state.update_data(datetime=dt.isoformat(), media_files=[])
     await state.set_state(AddEvent.media)
     await m.answer(
-        "📎 Прикрепи до 3 файлов (📸 фото / 🎥 видео) или сразу отправь геолокацию.\n"
-        "📍 Скрепка → Геопозиция → точка на карте.\n"
+        "📎 Прикрепи до 3 файлов (фото/видео) или сразу отправь геолокацию.\n"
+        "🧭 Как выбрать точку на карте: скрепка → Геопозиция → «Выбрать на карте».\n"
         "⚠ Аудио/кружки не поддерживаются.",
         reply_markup=kb_media_step()
     )
+
 
 @dp.message(AddEvent.media, F.content_type.in_({ContentType.PHOTO, ContentType.VIDEO}))
 async def step_media(m: Message, state: FSMContext):
     data = await state.get_data()
     files = data.get("media_files", [])
-    if len(files) >= MAX_MEDIA:
-        return await m.answer("⚠ Уже максимально файлов. Отправь геолокацию.", reply_markup=kb_media_step())
+    if len(files) >= 3:
+        return await m.answer("⚠ Уже 3 файла. Отправь геолокацию, чтобы продолжить.", reply_markup=kb_media_step())
     if m.photo:
         files.append({"type": "photo", "file_id": m.photo[-1].file_id})
     elif m.video:
         files.append({"type": "video", "file_id": m.video.file_id})
     await state.update_data(media_files=files)
-    left = MAX_MEDIA - len(files)
-    await m.answer(f"✅ Файл добавлен ({len(files)}/{MAX_MEDIA}). "
-                   + ("Можно добавить ещё или " if left else "")
-                   + "отправь геолокацию для следующего шага.", reply_markup=kb_media_step())
+    left = 3 - len(files)
+    tail = " Можно добавить ещё." if left else " Достигнут лимит — отправь геолокацию."
+    await m.answer(f"✅ Файл добавлен ({len(files)}/3).{tail}", reply_markup=kb_media_step())
+
+
+@dp.message(AddEvent.media, F.content_type.in_({ContentType.VOICE, ContentType.AUDIO}))
+async def media_not_supported(m: Message, state: FSMContext):
+    await m.answer("⚠ Аудио и кружки не поддерживаются. Прикрепи фото/видео.", reply_markup=kb_media_step())
+
 
 @dp.message(AddEvent.media, F.text == "⬅ Назад")
 async def media_back(m: Message, state: FSMContext):
@@ -491,22 +536,26 @@ async def media_back(m: Message, state: FSMContext):
     if files:
         files.pop()
         await state.update_data(media_files=files)
-        return await m.answer(f"🗑 Удалён последний файл ({len(files)}/{MAX_MEDIA}).", reply_markup=kb_media_step())
+        return await m.answer(f"🗑 Удалён последний файл ({len(files)}/3).", reply_markup=kb_media_step())
     await state.set_state(AddEvent.dt)
     await m.answer("📆 Вернулись к дате/времени. Введи ДД.ММ.ГГГГ ЧЧ:ММ", reply_markup=kb_back())
+
 
 @dp.message(AddEvent.media, F.location)
 async def step_media_location(m: Message, state: FSMContext):
     await state.update_data(lat=m.location.latitude, lon=m.location.longitude)
-    # сохраним гео пользователя
-    users = _load_users()
+
+    # Запомним локацию для пушей/баннеров
+    users = _doc_users()
     users[str(m.from_user.id)] = {
         "last_location": {"lat": m.location.latitude, "lon": m.location.longitude},
         "last_seen": datetime.now().isoformat()
     }
-    _save_users(users)
+    _save_doc_users(users)
+
     await state.set_state(AddEvent.contact)
     await m.answer("☎ Укажи контакт (@username, телефон или ссылка). Или напиши «Пропустить».", reply_markup=kb_back())
+
 
 @dp.message(AddEvent.contact)
 async def step_contact(m: Message, state: FSMContext):
@@ -517,6 +566,7 @@ async def step_contact(m: Message, state: FSMContext):
         await state.update_data(contact=m.text.strip())
     await state.set_state(AddEvent.lifetime)
     await m.answer("⏳ Выбери срок жизни объявления:", reply_markup=kb_lifetime())
+
 
 @dp.message(AddEvent.lifetime)
 async def step_lifetime(m: Message, state: FSMContext):
@@ -529,28 +579,35 @@ async def step_lifetime(m: Message, state: FSMContext):
 
     hours = LIFETIME_OPTIONS[m.text]
 
-    # Бесплатно — публикуем и апселл
     if hours == 24:
         data = await state.get_data()
         await publish_event(m, state, data, hours)
         await state.set_state(AddEvent.upsell)
         return await m.answer(
             "💡 Дополнительные опции:\n"
-            f"• ⭐ ТОП на 7 дней — ${PRICES['top_week']}\n"
-            f"• 📡 Push (30 км) — ${PRICES['push']}\n\n"
+            "⭐ <b>ТОП на 7 дней</b> — событие показываетcя первым в выдаче региона.\n"
+            "📡 <b>Push (30 км)</b> — рассылка всем активным пользователям рядом.\n\n"
             "Выберите опцию или разместите бесплатно.",
+            parse_mode=ParseMode.HTML,
             reply_markup=kb_upsell()
         )
 
-    # Платный срок → оплата
+    # Платные сроки — счёт
     amount = TARIFFS_USD[hours]
     await state.update_data(paid_lifetime=hours, _pay_uuid=None)
-    desc = (
-        f"Вы выбрали: <b>{m.text}</b>\nСтоимость: <b>${amount}</b>\n\n"
-        "Нажмите «💳 Получить ссылку на оплату», оплатите и затем «✅ Я оплатил»."
+    description = (
+        f"⏳ <b>Платный тариф</b>\n\n"
+        f"Вы выбрали: <b>{m.text}</b>\n"
+        f"Стоимость: <b>${amount}</b>\n\n"
+        "Что вы получаете:\n"
+        "• дольше показ в выдаче → больше просмотров;\n"
+        "• событие не исчезнет через 24 часа;\n"
+        "• больше шансов собрать гостей.\n\n"
+        "Нажмите «💳 Получить ссылку на оплату» для оплаты через CryptoCloud."
     )
     await state.set_state(AddEvent.payment)
-    await m.answer(desc, reply_markup=kb_payment())
+    await m.answer(description, parse_mode=ParseMode.HTML, reply_markup=kb_payment())
+
 
 @dp.message(AddEvent.payment, F.text == "💳 Получить ссылку на оплату")
 async def lifetime_get_link(m: Message, state: FSMContext):
@@ -562,11 +619,15 @@ async def lifetime_get_link(m: Message, state: FSMContext):
     order_id = f"lifetime_{hours}_{m.from_user.id}_{int(datetime.now().timestamp())}"
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: {hours}h lifetime")
     if not link:
-        return await m.answer("⚠ Не удалось получить ссылку (проверь ключи).", reply_markup=kb_payment())
+        return await m.answer("⚠ Не удалось получить ссылку на оплату. Проверь .env ключи.", reply_markup=kb_payment())
+    # сохраним платеж
+    pays = _doc_payments()
+    pays["payments"].append({"uuid": uuid, "type": "lifetime", "user": m.from_user.id, "amount": amount, "hours": hours})
+    _save_doc_payments(pays)
+
     await state.update_data(_pay_uuid=uuid)
-    # лог платежа
-    _payments_add(m.from_user.id, uuid, order_id, "lifetime", {"hours": hours}, amount)
     await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
+
 
 @dp.message(AddEvent.payment, F.text == "✅ Я оплатил")
 async def lifetime_paid(m: Message, state: FSMContext):
@@ -575,30 +636,29 @@ async def lifetime_paid(m: Message, state: FSMContext):
     hours = data.get("paid_lifetime")
     if not (uuid and hours):
         return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
+
     paid = await cc_is_paid(uuid)
     if not paid:
-        return await m.answer("⏳ Платёж пока не найден. Попробуйте чуть позже.", reply_markup=kb_payment())
+        return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
 
-    _payments_mark_paid(uuid)
     # публикуем событие
     await publish_event(m, state, data, hours)
-    # апселл
     await state.set_state(AddEvent.upsell)
     await m.answer(
         "✅ Событие опубликовано!\n\n"
-        "💡 Доп. опции:\n"
-        f"• ⭐ ТОП 7 дней — ${PRICES['top_week']}\n"
-        f"• 📡 Push (30 км) — ${PRICES['push']}\n\n"
+        f"⭐ ТОП 7 дней — ${PRICES['top_week']}\n"
+        f"📡 Push (30 км) — ${PRICES['push']}\n\n"
         "Выберите опцию или разместите бесплатно.",
         reply_markup=kb_upsell()
     )
+
 
 @dp.message(AddEvent.payment, F.text == "⬅ Назад")
 async def lifetime_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.lifetime)
     await m.answer("⏳ Вернулись к выбору срока жизни объявления:", reply_markup=kb_lifetime())
 
-# ---- Доп. опции (ТОП / PUSH) ----
+
 @dp.message(AddEvent.upsell)
 async def upsell_options(m: Message, state: FSMContext):
     text = m.text
@@ -606,9 +666,8 @@ async def upsell_options(m: Message, state: FSMContext):
         await state.clear()
         return await m.answer("Главное меню:", reply_markup=kb_main())
 
-    data = await state.get_data()
-    events = _load_events()
-    my_events = [e for e in events if e["author"] == m.from_user.id]
+    events_doc = _doc_events()
+    my_events = [e for e in events_doc["events"] if e["author"] == m.from_user.id]
     if not my_events:
         await state.clear()
         return await m.answer("❌ Не найдено созданных событий.", reply_markup=kb_main())
@@ -622,8 +681,10 @@ async def upsell_options(m: Message, state: FSMContext):
         await state.set_state(AddEvent.pay_option)
         await state.update_data(opt_type="top", opt_event_id=current_event["id"], _pay_uuid=None)
         return await m.answer(
-            f"⭐ <b>ТОП на 7 дней</b> — событие будет первым в выдаче региона.\nСтоимость: ${PRICES['top_week']}\n\n"
+            f"⭐ <b>ТОП на 7 дней</b> — событие показывается первым в регионе.\n"
+            f"Стоимость: ${PRICES['top_week']}\n\n"
             "Нажмите «💳 Получить ссылку на оплату».",
+            parse_mode=ParseMode.HTML,
             reply_markup=kb_payment()
         )
 
@@ -631,12 +692,15 @@ async def upsell_options(m: Message, state: FSMContext):
         await state.set_state(AddEvent.pay_option)
         await state.update_data(opt_type="push", opt_event_id=current_event["id"], _pay_uuid=None)
         return await m.answer(
-            f"📡 <b>Push</b> — сообщение получат активные пользователи в радиусе 30 км от точки события.\nСтоимость: ${PRICES['push']}\n\n"
+            f"📡 <b>Push-уведомление</b> — сообщение получат активные пользователи в радиусе 30 км от точки события.\n"
+            f"Стоимость: ${PRICES['push']}\n\n"
             "Нажмите «💳 Получить ссылку на оплату».",
+            parse_mode=ParseMode.HTML,
             reply_markup=kb_payment()
         )
 
     return await m.answer("Выберите опцию из меню ниже:", reply_markup=kb_upsell())
+
 
 @dp.message(AddEvent.pay_option, F.text == "💳 Получить ссылку на оплату")
 async def opt_get_link(m: Message, state: FSMContext):
@@ -650,10 +714,15 @@ async def opt_get_link(m: Message, state: FSMContext):
     order_id = f"{opt}_{ev_id}_{m.from_user.id}_{int(datetime.now().timestamp())}"
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar {opt}")
     if not link:
-        return await m.answer("⚠ Не удалось получить ссылку. Проверь ключи.", reply_markup=kb_payment())
+        return await m.answer("⚠ Не удалось получить ссылку на оплату. Проверь .env ключи.", reply_markup=kb_payment())
+
+    pays = _doc_payments()
+    pays["payments"].append({"uuid": uuid, "type": opt, "user": m.from_user.id, "ev_id": ev_id, "amount": amount})
+    _save_doc_payments(pays)
+
     await state.update_data(_pay_uuid=uuid)
-    _payments_add(m.from_user.id, uuid, order_id, opt, {"event_id": ev_id}, amount)
     await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
+
 
 @dp.message(AddEvent.pay_option, F.text == "✅ Я оплатил")
 async def opt_paid(m: Message, state: FSMContext):
@@ -663,15 +732,13 @@ async def opt_paid(m: Message, state: FSMContext):
     ev_id = data.get("opt_event_id")
     if not (uuid and opt and ev_id):
         return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
+
     paid = await cc_is_paid(uuid)
     if not paid:
-        return await m.answer("⏳ Платёж пока не найден. Попробуйте позже.", reply_markup=kb_payment())
+        return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
 
-    _payments_mark_paid(uuid)
-
-    # Применить опцию
-    events = _load_events()
-    target = next((e for e in events if e["id"] == ev_id), None)
+    events_doc = _doc_events()
+    target = next((e for e in events_doc["events"] if e["id"] == ev_id), None)
     if not target:
         await state.clear()
         return await m.answer("❌ Событие не найдено.", reply_markup=kb_main())
@@ -679,30 +746,33 @@ async def opt_paid(m: Message, state: FSMContext):
     if opt == "top":
         target["is_top"] = True
         target["top_expire"] = (datetime.now() + timedelta(days=7)).isoformat()
-        _save_events(events)
+        _save_doc_events(events_doc)
         await m.answer("✅ ТОП активирован на 7 дней!", reply_markup=kb_upsell())
-
     elif opt == "push":
         await send_push_for_event(target)
         await m.answer("✅ Push-рассылка отправлена активным пользователям в радиусе 30 км.", reply_markup=kb_upsell())
+
 
 @dp.message(AddEvent.pay_option, F.text == "⬅ Назад")
 async def opt_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.upsell)
     await m.answer("Выберите дополнительную опцию:", reply_markup=kb_upsell())
 
-# ---------- ПУБЛИКАЦИЯ СОБЫТИЯ ----------
+
 async def publish_event(m: Message, state: FSMContext, data: dict, hours: int):
     media_files = data.get("media_files", [])
     if not media_files:
+        # подставим лого, если есть
         for ext in ("png", "jpg", "jpeg"):
             p = BASE_DIR / f"logo.{ext}"
             if p.exists():
-                media_files = [{"type": "photo", "file_id": str(p), "is_local": True}]
+                media_files = [{"type": "photo", "file_id": f"logo.{ext}", "is_local": True}]
                 break
-    events = _load_events()
+
+    events_doc = _doc_events()
+    items = events_doc["events"]
     expires = datetime.now() + timedelta(hours=hours)
-    new_id = (events[-1]["id"] + 1) if events else 1
+    new_id = next_id(items)
     ev = {
         "id": new_id,
         "author": m.from_user.id,
@@ -710,17 +780,21 @@ async def publish_event(m: Message, state: FSMContext, data: dict, hours: int):
         "description": data["description"],
         "category": data["category"],
         "datetime": data["datetime"],
-        "lat": data.get("lat"),
-        "lon": data.get("lon"),
+        "lat": data["lat"],
+        "lon": data["lon"],
         "media_files": media_files,
         "contact": data.get("contact"),
         "expire": expires.isoformat(),
         "notified": False,
-        "is_top": False
+        "is_top": False,
+        "top_expire": None
     }
-    events.append(ev)
-    _save_events(events)
+    items.append(ev)
+    _save_doc_events(events_doc)
+
+    await state.update_data(last_event_id=new_id)
     await m.answer("✅ Событие успешно создано и опубликовано!", reply_markup=kb_main())
+
 
 # ===================== ПОИСК СОБЫТИЙ =====================
 @dp.message(F.text == "📍 Найти события рядом")
@@ -733,23 +807,26 @@ async def search_start(m: Message):
         resize_keyboard=True
     )
     await m.answer(
-        f"📍 Отправь геолокацию для поиска (скрепка → Геопозиция → точка на карте).\n"
+        f"📍 Отправь геолокацию для поиска.\n"
+        f"🧭 Скрепка → Геопозиция → «Выбрать на карте».\n"
         f"Поиск в радиусе ~ {DEFAULT_RADIUS_KM} км.",
         reply_markup=kb
     )
 
+
 @dp.message(F.location)
 async def search_with_location(m: Message):
-    # сохраним юзера
-    users = _load_users()
+    # Сохраним локацию пользователя (для пушей/баннеров)
+    users = _doc_users()
     users[str(m.from_user.id)] = {
         "last_location": {"lat": m.location.latitude, "lon": m.location.longitude},
         "last_seen": datetime.now().isoformat()
     }
-    _save_users(users)
+    _save_doc_users(users)
 
     user_loc = (m.location.latitude, m.location.longitude)
-    events = _load_events()
+    events_doc = _doc_events()
+    events = events_doc.get("events", [])
     now = datetime.now()
     found = []
     for ev in events:
@@ -758,18 +835,19 @@ async def search_with_location(m: Message):
                 continue
         except Exception:
             continue
-        if ev.get("lat") is None or ev.get("lon") is None:
-            continue
         dist = geodesic(user_loc, (ev["lat"], ev["lon"])).km
         if dist <= DEFAULT_RADIUS_KM:
             found.append((ev, dist))
 
-    # ТОП первее
+    # ТОП вперёд, затем по расстоянию
     found.sort(key=lambda x: ((0 if x[0].get("is_top") else 1), x[1]))
 
     if not found:
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="➕ Создать событие", callback_data="go_create")]])
-        return await m.answer("😔 Событий рядом не найдено.\nХочешь создать своё?", reply_markup=kb)
+        ikb_none = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="➕ Создать событие", callback_data="go_create")
+        ]])
+        return await m.answer("😔 Событий рядом не найдено.\nМожешь создать своё!", reply_markup=kb_main(),
+                              parse_mode=ParseMode.HTML)
 
     for ev, dist in found:
         text = format_event_card(ev) + f"\n📏 Расстояние: {dist:.1f} км"
@@ -779,37 +857,35 @@ async def search_with_location(m: Message):
             InlineKeyboardButton(text="📍 Telegram", url=map_tg),
             InlineKeyboardButton(text="🌐 Google Maps", url=map_g)
         ]])
+
         media = ev.get("media_files") or []
         for f in media:
             if f.get("is_local"):
-                f["file_id"] = FSInputFile(f["file_id"])
+                f["file_id"] = FSInputFile(str(BASE_DIR / f["file_id"]))
+
         if len(media) > 1:
             group = []
             for i, f in enumerate(media):
                 caption = text if i == 0 else None
                 if f["type"] == "photo":
-                    group.append(InputMediaPhoto(media=f["file_id"], caption=caption, parse_mode="HTML"))
+                    group.append(InputMediaPhoto(media=f["file_id"], caption=caption, parse_mode=ParseMode.HTML))
                 elif f["type"] == "video":
-                    group.append(InputMediaVideo(media=f["file_id"], caption=caption, parse_mode="HTML"))
+                    group.append(InputMediaVideo(media=f["file_id"], caption=caption, parse_mode=ParseMode.HTML))
             await bot.send_media_group(m.chat.id, group)
-            await bot.send_message(m.chat.id, "🗺 <b>Локация:</b>", reply_markup=ikb, parse_mode="HTML")
+            await bot.send_message(m.chat.id, "🗺 <b>Локация:</b>", reply_markup=ikb, parse_mode=ParseMode.HTML)
         elif len(media) == 1:
             f = media[0]
             if f["type"] == "photo":
-                await m.answer_photo(f["file_id"], caption=text, reply_markup=ikb, parse_mode="HTML")
+                await m.answer_photo(f["file_id"], caption=text, reply_markup=ikb, parse_mode=ParseMode.HTML)
             elif f["type"] == "video":
-                await m.answer_video(f["file_id"], caption=text, reply_markup=ikb, parse_mode="HTML")
+                await m.answer_video(f["file_id"], caption=text, reply_markup=ikb, parse_mode=ParseMode.HTML)
         else:
-            await m.answer(text, reply_markup=ikb, parse_mode="HTML")
+            await m.answer(text, reply_markup=ikb, parse_mode=ParseMode.HTML)
 
-@dp.callback_query(F.data == "go_create")
-async def go_create_cb(cq: CallbackQuery, state: FSMContext):
-    await cq.answer()
-    await create_start(cq.message, state)
 
-# ===================== PUSH / CLEANUP ДЕМОНЫ =====================
+# ===================== PUSH =====================
 async def send_push_for_event(ev: dict):
-    users = _load_users()
+    users = _doc_users()
     now = datetime.now()
     count = 0
     for uid, u in users.items():
@@ -831,12 +907,13 @@ async def send_push_for_event(ev: dict):
                 pass
     logging.info(f"Push sent to {count} users.")
 
+
 async def push_daemon():
     while True:
-        events = _load_events()
-        now = datetime.now()
+        events_doc = _doc_events()
         changed = False
-        for ev in events:
+        now = datetime.now()
+        for ev in events_doc["events"]:
             # снять просроченный ТОП
             if ev.get("is_top") and ev.get("top_expire"):
                 try:
@@ -866,19 +943,21 @@ async def push_daemon():
                 try:
                     await bot.send_message(
                         ev["author"],
-                        f"⏳ Событие «{ev['title']}» скоро завершится. Хотите продлить?",
+                        f"⏳ Событие «{safe(ev['title'])}» скоро завершится. Хотите продлить?",
                         reply_markup=kb
                     )
                 except Exception:
                     pass
         if changed:
-            _save_events(events)
+            _save_doc_events(events_doc)
         await asyncio.sleep(300)
 
+
 @dp.callback_query(F.data.startswith("extend:"))
-async def extend_from_push(cq: CallbackQuery, state: FSMContext):
+async def extend_from_push(cq: CallbackQuery):
     _, ev_id, hours = cq.data.split(":")
-    ev_id = int(ev_id); hours = int(hours)
+    ev_id = int(ev_id)
+    hours = int(hours)
     amount = TARIFFS_USD.get(hours)
     if not amount:
         return await cq.answer("Тариф не найден", show_alert=True)
@@ -888,64 +967,32 @@ async def extend_from_push(cq: CallbackQuery, state: FSMContext):
     )
     await cq.answer()
 
-async def cleanup_daemon():
-    while True:
-        now = datetime.now()
-        # events
-        events = _load_events()
-        updated = []
-        for ev in events:
-            try:
-                if datetime.fromisoformat(ev["expire"]) > now:
-                    updated.append(ev)
-                else:
-                    try:
-                        await bot.send_message(ev["author"], f"🗑 Событие «{ev['title']}» истекло и удалено.")
-                    except Exception:
-                        pass
-            except Exception:
-                updated.append(ev)
-        if len(updated) != len(events):
-            _save_events(updated)
-
-        # banners
-        banners = _load_banners()
-        banners_updated = []
-        for b in banners:
-            try:
-                if datetime.fromisoformat(b["expire"]) > now:
-                    banners_updated.append(b)
-            except Exception:
-                banners_updated.append(b)
-        if len(banners_updated) != len(banners):
-            _save_banners(banners_updated)
-
-        await asyncio.sleep(600)
 
 # ===================== БАННЕРЫ =====================
 @dp.message(F.text == "🖼 Купить баннер")
 async def banner_start(m: Message, state: FSMContext):
     await state.set_state(AddBanner.media)
     await m.answer(
-        "🖼 Загрузка баннера.\nПришлите <b>фото или видео</b> (текст — в подписи, ссылку добавим далее).",
-        reply_markup=kb_back()
+        "🖼 Загрузка баннера.\nПришлите <b>фото или видео</b> баннера (подпись можно добавить — и ссылку далее).",
+        parse_mode=ParseMode.HTML, reply_markup=kb_back()
     )
+
 
 @dp.message(AddBanner.media, F.content_type == ContentType.PHOTO)
 async def banner_media_photo(m: Message, state: FSMContext):
-    file_id = m.photo[-1].file_id
-    text = (m.caption or "").strip()
-    await state.update_data(b_media={"type": "photo", "file_id": file_id}, b_text=text)
+    await state.update_data(b_media={"type": "photo", "file_id": m.photo[-1].file_id},
+                            b_text=(m.caption or "").strip())
     await state.set_state(AddBanner.url)
     await m.answer("🔗 Укажи ссылку (или напиши «Пропустить»).", reply_markup=kb_back())
 
+
 @dp.message(AddBanner.media, F.content_type == ContentType.VIDEO)
 async def banner_media_video(m: Message, state: FSMContext):
-    file_id = m.video.file_id
-    text = (m.caption or "").strip()
-    await state.update_data(b_media={"type": "video", "file_id": file_id}, b_text=text)
+    await state.update_data(b_media={"type": "video", "file_id": m.video.file_id},
+                            b_text=(m.caption or "").strip())
     await state.set_state(AddBanner.url)
     await m.answer("🔗 Укажи ссылку (или напиши «Пропустить»).", reply_markup=kb_back())
+
 
 @dp.message(AddBanner.media)
 async def banner_media_wrong(m: Message, state: FSMContext):
@@ -953,6 +1000,7 @@ async def banner_media_wrong(m: Message, state: FSMContext):
         await state.clear()
         return await m.answer("Главное меню:", reply_markup=kb_main())
     await m.answer("⚠ Пришлите фото или видео баннера.", reply_markup=kb_back())
+
 
 @dp.message(AddBanner.url)
 async def banner_url(m: Message, state: FSMContext):
@@ -962,20 +1010,25 @@ async def banner_url(m: Message, state: FSMContext):
     url = None if m.text.lower().strip() == "пропустить" else m.text.strip()
     await state.update_data(b_url=url)
     await state.set_state(AddBanner.geolocation)
-    await m.answer("📍 Отправьте геолокацию региона показа (скрепка → Геопозиция).", reply_markup=ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                  [KeyboardButton(text="⬅ Назад")]], resize_keyboard=True))
+    await m.answer("📍 Отправьте геолокацию региона, где показывать баннер (скрепка → Геопозиция).",
+                   reply_markup=ReplyKeyboardMarkup(
+                       keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
+                                 [KeyboardButton(text="⬅ Назад")]],
+                       resize_keyboard=True
+                   ))
+
 
 @dp.message(AddBanner.geolocation, F.location)
 async def banner_geo(m: Message, state: FSMContext):
     await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
     await state.set_state(AddBanner.duration)
     await m.answer(
-        f"⏳ Срок показа баннера:\n"
+        f"⏳ Выберите срок показа баннера:\n"
         f"• 7 дней — ${PRICES['banner_week']}\n"
         f"• 30 дней — ${PRICES['banner_month']}",
         reply_markup=kb_banner_duration()
     )
+
 
 @dp.message(AddBanner.geolocation)
 async def banner_geo_wait(m: Message, state: FSMContext):
@@ -984,7 +1037,10 @@ async def banner_geo_wait(m: Message, state: FSMContext):
         return await m.answer("🔗 Укажи ссылку (или «Пропустить»).", reply_markup=kb_back())
     await m.answer("⚠ Отправьте геолокацию баннера.", reply_markup=ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                  [KeyboardButton(text="⬅ Назад")]], resize_keyboard=True))
+                  [KeyboardButton(text="⬅ Назад")]],
+        resize_keyboard=True
+    ))
+
 
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
@@ -992,7 +1048,10 @@ async def banner_duration(m: Message, state: FSMContext):
         await state.set_state(AddBanner.geolocation)
         return await m.answer("📍 Отправьте геолокацию региона баннера.", reply_markup=ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                      [KeyboardButton(text="⬅ Назад")]], resize_keyboard=True))
+                      [KeyboardButton(text="⬅ Назад")]],
+            resize_keyboard=True
+        ))
+
     if m.text == "🗓 Баннер на 7 дней":
         amount = PRICES["banner_week"]; days = 7
     elif m.text == "📅 Баннер на месяц":
@@ -1006,11 +1065,13 @@ async def banner_duration(m: Message, state: FSMContext):
         await state.set_state(AddBanner.geolocation)
         return await m.answer("📍 Сначала отправьте геолокацию региона баннера.", reply_markup=ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                      [KeyboardButton(text="⬅ Назад")]], resize_keyboard=True))
+                      [KeyboardButton(text="⬅ Назад")]],
+            resize_keyboard=True
+        ))
 
-    # Проверка слотов региона (на сейчас активных)
-    now = datetime.now()
-    region_active = banners_in_region(b_lat, b_lon, _load_banners(), now)
+    # Проверка слотов
+    banners_doc = _doc_banners()
+    region_active = banners_in_region(b_lat, b_lon, banners_doc.get("banners", []), datetime.now())
     if len(region_active) >= MAX_BANNERS_PER_REGION:
         return await m.answer(
             "❌ Все баннерные слоты в этом регионе заняты. Попробуйте позже или другой регион.",
@@ -1021,10 +1082,11 @@ async def banner_duration(m: Message, state: FSMContext):
     await state.set_state(AddBanner.payment)
     desc = (
         "🖼 <b>Баннер</b>\n\n"
-        "Можно разместить что угодно: картинку/видео, текст, ссылки на проект, музыку, соцсети.\n"
-        "Баннер показывается в /start пользователям в выбранном регионе (до 3 слотов, ротация).\n\n"
+        "Можно разместить что угодно: картинку/видео, текст, ссылки на проект, музыку, соцсети — без ограничений.\n"
+        "Баннер показывается в /start пользователям в выбранном регионе (до 3 слотов на регион, ротация).\n\n"
         f"Стоимость: ${amount}\nНажмите «💳 Получить ссылку на оплату».")
-    await m.answer(desc, reply_markup=kb_payment())
+    await m.answer(desc, parse_mode=ParseMode.HTML, reply_markup=kb_payment())
+
 
 @dp.message(AddBanner.payment, F.text == "💳 Получить ссылку на оплату")
 async def banner_get_link(m: Message, state: FSMContext):
@@ -1034,8 +1096,8 @@ async def banner_get_link(m: Message, state: FSMContext):
     if not days:
         return await m.answer("❌ Срок не выбран.", reply_markup=kb_banner_duration())
 
-    now = datetime.now()
-    region_active = banners_in_region(b_lat, b_lon, _load_banners(), now)
+    banners_doc = _doc_banners()
+    region_active = banners_in_region(b_lat, b_lon, banners_doc.get("banners", []), datetime.now())
     if len(region_active) >= MAX_BANNERS_PER_REGION:
         return await m.answer(
             "❌ Все баннерные слоты в этом регионе заняты. Попробуйте позже или другой регион.",
@@ -1046,10 +1108,16 @@ async def banner_get_link(m: Message, state: FSMContext):
     order_id = f"banner_{m.from_user.id}_{int(datetime.now().timestamp())}"
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar banner {days}d")
     if not link:
-        return await m.answer("⚠ Не удалось получить ссылку. Проверь ключи.", reply_markup=kb_payment())
+        return await m.answer("⚠ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
+
+    pays = _doc_payments()
+    pays["payments"].append({"uuid": uuid, "type": "banner", "user": m.from_user.id,
+                             "amount": amount, "days": days, "lat": b_lat, "lon": b_lon})
+    _save_doc_payments(pays)
+
     await state.update_data(_pay_uuid=uuid)
-    _payments_add(m.from_user.id, uuid, order_id, "banner", {"days": days, "lat": b_lat, "lon": b_lon}, amount)
     await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
+
 
 @dp.message(AddBanner.payment, F.text == "✅ Я оплатил")
 async def banner_paid(m: Message, state: FSMContext):
@@ -1057,29 +1125,28 @@ async def banner_paid(m: Message, state: FSMContext):
     uuid = data.get("_pay_uuid")
     if not uuid:
         return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
+
     paid = await cc_is_paid(uuid)
     if not paid:
-        return await m.answer("⏳ Платёж пока не найден. Попробуйте позже.", reply_markup=kb_payment())
+        return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
 
-    _payments_mark_paid(uuid)
-
-    # Проверка слотов ещё раз и запись баннера
     b_media = data.get("b_media"); b_text = (data.get("b_text") or "").strip()
     b_url = data.get("b_url"); days = data.get("b_days")
     b_lat = data.get("b_lat"); b_lon = data.get("b_lon")
 
-    now = datetime.now()
-    region_active = banners_in_region(b_lat, b_lon, _load_banners(), now)
+    # Повторная проверка слотов
+    banners_doc = _doc_banners()
+    region_active = banners_in_region(b_lat, b_lon, banners_doc.get("banners", []), datetime.now())
     if len(region_active) >= MAX_BANNERS_PER_REGION:
-        await state.clear()
         return await m.answer(
             "❌ Пока вы оплачивали, все слоты заняли. Напишите в поддержку — решим вопрос.",
             reply_markup=kb_main()
         )
-    banners = _load_banners()
-    new_id = (banners[-1]["id"] + 1) if banners else 1
+
+    items = banners_doc["banners"]
+    new_id = next_id(items)
     expire = datetime.now() + timedelta(days=days)
-    banners.append({
+    items.append({
         "id": new_id,
         "owner": m.from_user.id,
         "media_type": b_media["type"],
@@ -1091,45 +1158,72 @@ async def banner_paid(m: Message, state: FSMContext):
         "region": "geo",
         "expire": expire.isoformat()
     })
-    _save_banners(banners)
+    _save_doc_banners(banners_doc)
     await state.clear()
     await m.answer("✅ Баннер активирован и будет показан пользователям в выбранном регионе.", reply_markup=kb_main())
+
 
 @dp.message(AddBanner.payment, F.text == "⬅ Назад")
 async def banner_pay_back(m: Message, state: FSMContext):
     await state.set_state(AddBanner.duration)
     await m.answer("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
 
+
 # ===================== SUPPORT / BACK / FALLBACK =====================
 @dp.message(F.text == "💬 Поддержка")
 async def support(m: Message):
     await m.answer("📩 Поддержка: @ТВОЙ_ЮЗЕР", reply_markup=kb_main())
 
+
 @dp.message(F.text == "⬅ Назад")
 async def global_back(m: Message, state: FSMContext):
-    # Общий возврат в главное меню, если состояние неизвестно:
-    cur = await state.get_state()
-    if not cur:
-        return await m.answer("Главное меню:", reply_markup=kb_main())
-    # иначе каждый обработчик «назад» уже отловлен в своём стейте
-    await m.answer("Главное меню:", reply_markup=kb_main())
+    # Универсальный «Назад» — возвращаем в главное меню
+    # (внутри шагов уже есть контекстный «Назад», этот — глобальная защита)
     await state.clear()
+    await m.answer("Главное меню:", reply_markup=kb_main())
+
 
 @dp.message()
 async def fallback(m: Message):
     await m.answer("Я не понял команду. Используй кнопки ниже 👇", reply_markup=kb_main())
 
-# =================== RUN ===================
 
-import os
-import asyncio
-import logging
+# ===================== CLEANUP DAEMON =====================
+async def cleanup_daemon():
+    while True:
+        now = datetime.now()
+        # События
+        events_doc = _doc_events()
+        before = len(events_doc["events"])
+        events_doc["events"] = [
+            ev for ev in events_doc["events"]
+            if (datetime.fromisoformat(ev["expire"]) > now) if ev.get("expire") else True
+        ]
+        after = len(events_doc["events"])
+        if after != before:
+            _save_doc_events(events_doc)
 
+        # Баннеры
+        banners_doc = _doc_banners()
+        before_b = len(banners_doc["banners"])
+        banners_doc["banners"] = [
+            b for b in banners_doc["banners"]
+            if (datetime.fromisoformat(b["expire"]) > now) if b.get("expire") else True
+        ]
+        after_b = len(banners_doc["banners"])
+        if after_b != before_b:
+            _save_doc_banners(banners_doc)
+
+        await asyncio.sleep(600)
+
+
+# ===================== RUN =====================
 async def main():
     logging.info("✅ PartyRadar запущен...")
     asyncio.create_task(push_daemon())
     asyncio.create_task(cleanup_daemon())
     await dp.start_polling(bot)
+
 
 async def safe_run():
     while True:
@@ -1139,6 +1233,7 @@ async def safe_run():
             logging.error(f"❌ Polling crashed: {e}")
             await asyncio.sleep(5)
             logging.info("♻️ Restarting polling...")
+
 
 if __name__ == "__main__":
     try:
