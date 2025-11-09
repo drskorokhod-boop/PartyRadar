@@ -1,5 +1,5 @@
 aiogram==3.3.0
 aiohttp==3.9.5
-pydantic==2.9.2
+pydantic==2.5.3
 geopy==2.4.1
 python-dotenv==1.0.1
