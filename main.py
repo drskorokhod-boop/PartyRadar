@@ -310,36 +310,36 @@ async def cc_is_paid(uuid: str) -> bool:
         return False
 
 # -------------------- START --------------------
-@dp.message(Command("start"))
-async def start_cmd(m: Message, state: FSMContext):
-    # баннер по региону (если есть)
-    users = load_users()
-    udata = users.get(str(m.from_user.id), {})
-    banner = pick_random_banner_for_user(udata, load_banners())
-    if banner:
-        cap = (banner.get("text") or "").strip()
-        url = (banner.get("url") or "").strip()
-        cap_full = (cap + ("\n" + url if url else "")).strip()
-        if banner.get("media_type") == "photo":
-            await m.answer_photo(banner["file_id"], caption=cap_full)
-        elif banner.get("media_type") == "video":
-            await m.answer_video(banner["file_id"], caption=cap_full)
+@dp.message_handler(commands=['start'])
+async def start_command(message: types.Message):
+    # Логотип
+    logo_path = "imgonline-com-ua-Resize-poVtNXt7aue6.png"
+    with open(logo_path, 'rb') as photo:
+        await bot.send_photo(message.chat.id, photo)
 
-    # логотип
-    logo = "imgonline-com-ua-Resize-poVtNXt7aue6.png"
-    if os.path.exists(logo):
-        await m.answer_photo(FSInputFile(logo))
-        await asyncio.sleep(0.7)
+    # Задержка 1 секунда для эффекта
+    await asyncio.sleep(1)
 
-    # приветствие
-    welcome = (
-        "👋 Добро пожаловать в <b>PartyRadar</b>!\n\n"
-        "🎉 Находи и создавай события: вечеринки, свидания, встречи по интересам, спорт и многое другое.\n"
-        "⏳ Бесплатный срок — 24 часа. Платные — дольше и выгоднее.\n"
-        "💡 При создании доступны: платный срок, ТОП, PUSH и баннеры."
+    # Приветствие по буквам
+    welcome_text = "🎉 Добро пожаловать в PartyRadar!\n\n" \
+                   "Здесь ты можешь найти вечеринки, знакомства и события рядом 🌍"
+    sent_msg = await message.answer("")
+    for i in range(1, len(welcome_text) + 1):
+        await asyncio.sleep(0.04)
+        await sent_msg.edit_text(welcome_text[:i])
+
+    # Основное меню
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        InlineKeyboardButton("📍 Найти события рядом", callback_data="find_nearby"),
+        InlineKeyboardButton("🎈 Создать событие", callback_data="create_event")
     )
-    await typewriter(m.chat.id, welcome, delay=0.012)
-    await m.answer("Выбери действие:", reply_markup=kb_main())
+    keyboard.add(
+        InlineKeyboardButton("💬 Чат по радиусу", callback_data="chat_radius"),
+        InlineKeyboardButton("ℹ️ О проекте", callback_data="about")
+    )
+
+    await message.answer("Главное меню:", reply_markup=keyboard)
 
 # -------------------- ТАРИФЫ --------------------
 @dp.message(F.text == "💰 Тарифы")
