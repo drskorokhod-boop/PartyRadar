@@ -394,7 +394,7 @@ async def start_cmd(m: Message, state: FSMContext):
     await state.clear()
 
     # 🔗 Резервная ссылка на логотип из GitHub (если Render не видит файл)
-    GITHUB_LOGO_URL = "https://raw.githubusercontent.com/ТВОЙ_ЮЗЕРНЕЙМ/ТВОЙ_РЕПО/main/imgonline-com-ua-Resize-poVtNXt7aue6.png"
+    GITHUB_LOGO_URL = "https://raw.githubusercontent.com/drskorokhod-boop/PartyRadar/main/imgonline-com-ua-Resize-poVtNXt7aue6.png"
 
     sent_logo = False
     logo_path = BASE_DIR / "imgonline-com-ua-Resize-poVtNXt7aue6.png"
