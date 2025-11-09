@@ -24,7 +24,6 @@ from aiogram.types import (
     FSInputFile, InputMediaPhoto, InputMediaVideo,
     ContentType
 )
-from aiogram.utils.markdown import escape_html
 from dotenv import load_dotenv
 
 # ===================== CONFIG =====================
