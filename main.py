@@ -395,7 +395,7 @@ async def start_cmd(m: Message, state: FSMContext):
     # 1) Логотип всегда (если есть в корне)
     sent_logo = False
     for ext in ("png", "jpg", "jpeg"):
-        p = BASE_DIR / f"logo.{ext}"
+        p = BASE_DIR / f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
         if p.exists():
             try:
                 await m.answer_photo(FSInputFile(str(p)), caption="👋 Добро пожаловать в PartyRadar!")
