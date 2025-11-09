@@ -388,26 +388,30 @@ def kb_banner_duration():
     )
 
 
-# ===================== START =====================
+# ================== START ==================
 @dp.message(CommandStart())
 async def start_cmd(m: Message, state: FSMContext):
     await state.clear()
 
-    # 1) Логотип всегда (если есть в корне)
+    # 1️⃣ Логотип (если есть в корне)
     sent_logo = False
-    for ext in ("png", "jpg", "jpeg"):
-        p = BASE_DIR / f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
-        if p.exists():
-            try:
-                await m.answer_photo(FSInputFile(str(p)), caption="👋 Добро пожаловать в PartyRadar!")
+    try:
+        for ext in ("png", "jpg", "jpeg"):
+            p = BASE_DIR / f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
+            if p.exists():
+                await m.answer_photo(FSInputFile(str(p)))  # без подписи
                 sent_logo = True
+                logging.info("✅ Логотип найден и отправлен пользователю.")
                 break
-            except Exception as e:
-                logging.warning(f"Logo send failed: {e}")
-    # Не выводим отдельное приветствие — оно уже есть ниже в тексте
-                pass
+        if not sent_logo:
+            logging.warning("⚠️ Логотип не найден в корне проекта.")
+    except Exception as e:
+        logging.error(f"❌ Ошибка при отправке логотипа: {e}")
 
-    # 2) Баннер региона (если есть активные)
+    # ⏳ Пауза для визуального эффекта
+    await asyncio.sleep(1.5)
+
+    # 2️⃣ Баннер региона (если активен)
     users = _doc_users()
     user_data = users.get(str(m.from_user.id), {})
     banners_doc = _doc_banners()
@@ -421,14 +425,28 @@ async def start_cmd(m: Message, state: FSMContext):
         elif banner.get("media_type") == "video":
             await m.answer_video(banner["file_id"], caption=cap_full)
 
-    # 3) Приветствие и меню
-    welcome = (
-        "🎉 Добро пожаловать в <b>PartyRadar</b>!\n\n"
-        "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам, спорт и многое другое.\n\n"
-        "⏳ Объявления живут <b>24 часа бесплатно</b>.\n"
-        "💳 Можно выбрать платный срок, ТОП или Push — всё на автомате."
-    )
-    await m.answer(welcome, reply_markup=kb_main(), parse_mode=ParseMode.HTML)
+    # ⏳ Ещё пауза перед приветствием
+    await asyncio.sleep(1)
+
+    # 3️⃣ Эффект "печати" приветствия
+    welcome_lines = [
+        "🎉 <b>Добро пожаловать в PartyRadar!</b>",
+        "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам.",
+        "⏳ Объявления живут <b>24 часа бесплатно</b>.",
+        "🚀 Можно выбрать платный срок, ТОП или Push — всё на автомате."
+    ]
+
+    typing_message = await m.answer("🤖 ...")
+    await asyncio.sleep(0.8)
+
+    for i, line in enumerate(welcome_lines):
+        text = "\n\n".join(welcome_lines[:i + 1])
+        await typing_message.edit_text(
+            text,
+            reply_markup=kb_main() if i == len(welcome_lines) - 1 else None,
+            parse_mode=ParseMode.HTML
+        )
+        await asyncio.sleep(0.9)
 
 
 # ===================== ТАРИФЫ =====================
