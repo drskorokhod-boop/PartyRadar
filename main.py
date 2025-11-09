@@ -393,25 +393,42 @@ def kb_banner_duration():
 async def start_cmd(m: Message, state: FSMContext):
     await state.clear()
 
-    # 1️⃣ Логотип (если есть в корне)
+    # 🔗 Резервная ссылка на логотип из GitHub (если Render не видит файл)
+    GITHUB_LOGO_URL = "https://raw.githubusercontent.com/ТВОЙ_ЮЗЕРНЕЙМ/ТВОЙ_РЕПО/main/imgonline-com-ua-Resize-poVtNXt7aue6.png"
+
     sent_logo = False
+    logo_path = BASE_DIR / "imgonline-com-ua-Resize-poVtNXt7aue6.png"
+
     try:
-        for ext in ("png", "jpg", "jpeg"):
-            p = BASE_DIR / f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
-            if p.exists():
-                await m.answer_photo(FSInputFile(str(p)))  # без подписи
-                sent_logo = True
-                logging.info("✅ Логотип найден и отправлен пользователю.")
-                break
+        # 1️⃣ Пробуем отправить локальный логотип
+        if logo_path.exists():
+            await m.answer_photo(FSInputFile(str(logo_path)))
+            sent_logo = True
+            logging.info("✅ Логотип найден локально и отправлен пользователю.")
+        else:
+            # 2️⃣ Если не найден — пробуем GitHub URL
+            async with aiohttp.ClientSession() as session:
+                async with session.get(GITHUB_LOGO_URL) as resp:
+                    if resp.status == 200:
+                        photo_bytes = await resp.read()
+                        await m.answer_photo(photo_bytes)
+                        sent_logo = True
+                        logging.info("✅ Логотип загружен с GitHub и отправлен.")
+                    else:
+                        logging.warning(f"⚠️ Не удалось загрузить логотип. Код: {resp.status}")
+
+        # 3️⃣ Если не найден нигде — текст-заглушка
         if not sent_logo:
-            logging.warning("⚠️ Логотип не найден в корне проекта.")
+            await m.answer("🎈 <b>PartyRadar</b>", parse_mode=ParseMode.HTML)
+            logging.warning("⚠️ Логотип не найден, отправлен текст-заглушка.")
     except Exception as e:
+        await m.answer("🎈 <b>PartyRadar</b>", parse_mode=ParseMode.HTML)
         logging.error(f"❌ Ошибка при отправке логотипа: {e}")
 
-    # ⏳ Пауза для визуального эффекта
+    # ⏳ Короткая пауза для плавности
     await asyncio.sleep(1.5)
 
-    # 2️⃣ Баннер региона (если активен)
+    # 4️⃣ Баннер региона (если активен)
     users = _doc_users()
     user_data = users.get(str(m.from_user.id), {})
     banners_doc = _doc_banners()
@@ -425,10 +442,9 @@ async def start_cmd(m: Message, state: FSMContext):
         elif banner.get("media_type") == "video":
             await m.answer_video(banner["file_id"], caption=cap_full)
 
-    # ⏳ Ещё пауза перед приветствием
     await asyncio.sleep(1)
 
-    # 3️⃣ Эффект "печати" приветствия
+    # 5️⃣ Эффект "печати" приветствия
     welcome_lines = [
         "🎉 <b>Добро пожаловать в PartyRadar!</b>",
         "🔥 Находи и создавай события: вечеринки, свидания, встречи по интересам.",
