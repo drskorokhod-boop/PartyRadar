@@ -1195,23 +1195,26 @@ async def cleanup_daemon():
         # События
         events_doc = _doc_events()
         before = len(events_doc["events"])
-        events_doc["events"] = [
-            ev for ev in events_doc["events"]
-            if (datetime.fromisoformat(ev["expire"]) > now) if ev.get("expire") else True
-        ]
-        after = len(events_doc["events"])
-        if after != before:
-            _save_doc_events(events_doc)
+        # События
+    events_doc = _doc_events()
+    before = len(events_doc["events"])
+    events_doc["events"] = [
+        ev for ev in events_doc["events"]
+        if not ev.get("expire") or datetime.fromisoformat(ev["expire"]) > now
+    ]
+    after = len(events_doc["events"])
+    if after != before:
+        _save_doc_events(events_doc)
 
-        # Баннеры
-        banners_doc = _doc_banners()
-        before_b = len(banners_doc["banners"])
-        banners_doc["banners"] = [
-            b for b in banners_doc["banners"]
-            if (datetime.fromisoformat(b["expire"]) > now) if b.get("expire") else True
-        ]
-        after_b = len(banners_doc["banners"])
-        if after_b != before_b:
+    # Баннеры 
+    banners_doc = _doc_banners()
+    before_b = len(banners_doc["banners"])
+    banners_doc["banners"] = [
+        b for b in banners_doc["banners"]
+        if not b.get("expire") or datetime.fromisoformat(b["expire"]) > now
+    ]
+    after_b = len(banners_doc["banners"])
+    if after_b != before_b:
             _save_doc_banners(banners_doc)
 
         await asyncio.sleep(600)
