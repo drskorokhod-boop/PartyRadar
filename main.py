@@ -1,5 +1,5 @@
-# rebuild render cache
 # -*- coding: utf-8 -*-
+# force rebuild
 import asyncio
 import json
 import logging
