@@ -405,6 +405,7 @@ async def start_cmd(m: Message, state: FSMContext):
             except Exception as e:
                 logging.warning(f"Logo send failed: {e}")
     # Не выводим отдельное приветствие — оно уже есть ниже в тексте
+                pass
 
     # 2) Баннер региона (если есть активные)
     users = _doc_users()
