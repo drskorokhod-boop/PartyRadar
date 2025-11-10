@@ -1224,11 +1224,15 @@ async def fallback(m: Message):
 
 # ================= RUN APP (Render webhook only) =================
 
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+
 async def make_web_app():
     app = web.Application()
     app.router.add_post("/payment_callback", handle_payment_callback)
     app.router.add_get("/payment_callback", handle_payment_callback)
-    app.router.add_post("/webhook", dp.webhook_handler)
+
+    # создаём webhook handler из aiogram
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
     return app
 
 
@@ -1248,11 +1252,11 @@ async def main():
     await on_startup()
     logging.info("✅ Webhook server running on port 10000")
 
-    # запуск фоновых задач
+    # фоновые задачи
     asyncio.create_task(push_daemon())
     asyncio.create_task(cleanup_daemon())
 
-    # бесконечный цикл, чтобы процесс не завершался
+    # чтобы процесс не завершался
     while True:
         await asyncio.sleep(3600)
 
