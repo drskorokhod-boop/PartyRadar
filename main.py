@@ -1222,30 +1222,43 @@ async def global_back(m: Message, state: FSMContext):
 async def fallback(m: Message):
     await m.answer("Я не понял команду. Используй кнопки ниже 👇", reply_markup=kb_main())
 
-# ===================== RUN APP (Render: polling + aiohttp) =====================
-async def run_bot():
-    asyncio.create_task(push_daemon())
-    asyncio.create_task(cleanup_daemon())
-    await dp.start_polling(bot)
+# ================= RUN APP (Render webhook only) =================
 
-def make_web_app() -> web.Application:
+async def make_web_app():
     app = web.Application()
-    app.add_routes([web.post("/payment_callback", handle_payment_callback),
-                    web.get("/payment_callback", handle_payment_callback)])
+    app.router.add_post("/payment_callback", handle_payment_callback)
+    app.router.add_get("/payment_callback", handle_payment_callback)
+    app.router.add_post("/webhook", dp.webhook_handler)
     return app
 
-async def main():
-    port = int(os.getenv("PORT", "8080"))
-    runner = web.AppRunner(make_web_app())
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logging.info(f"🌐 Webhook server listening on 0.0.0.0:{port} /payment_callback")
 
-    await run_bot()
+async def on_startup():
+    webhook_url = f"{os.getenv('PUBLIC_URL')}/webhook"
+    await bot.set_webhook(webhook_url)
+    logging.info(f"🚀 Webhook set to {webhook_url}")
+
+
+async def main():
+    app = await make_web_app()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
+
+    await on_startup()
+    logging.info("✅ Webhook server running on port 10000")
+
+    # запуск фоновых задач
+    asyncio.create_task(push_daemon())
+    asyncio.create_task(cleanup_daemon())
+
+    # бесконечный цикл, чтобы процесс не завершался
+    while True:
+        await asyncio.sleep(3600)
+
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        pass
+        logging.info("🛑 Server stopped manually")
