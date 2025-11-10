@@ -1,7 +1,4 @@
-aiogram==2.25.1
-aiofiles
-pydantic
-geopy
-magic-filter
-typing-extensions
-python-dotenv
+aiogram==3.13.1
+aiohttp==3.10.5
+python-dotenv==1.0.1
+geopy==2.4.1
