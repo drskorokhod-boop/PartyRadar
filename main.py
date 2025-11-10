@@ -1220,6 +1220,8 @@ async def global_back(m: Message, state: FSMContext):
 
 @dp.message()
 async def fallback(m: Message):
+    if not m.text:
+        return
     await m.answer("Я не понял команду. Используй кнопки ниже 👇", reply_markup=kb_main())
 
 # ================= RUN APP (Render webhook only) =================
