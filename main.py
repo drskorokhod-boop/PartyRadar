@@ -29,6 +29,8 @@ from aiogram.types import (
     InputMediaPhoto, InputMediaVideo,
     ContentType
 )
+from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
 
 # ===================== CONFIG =====================
@@ -44,9 +46,8 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or 0)
 LOGO_URL = ""  # например: "https://raw.githubusercontent.com/username/repo/branch/logo.png"
 
 logging.basicConfig(level=logging.INFO)
-bot = Bot(TOKEN, parse_mode="HTML")
+bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
-
 # Файлы хранения
 EVENTS_FILE = "events.json"
 BANNERS_FILE = "banners.json"
