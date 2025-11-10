@@ -377,17 +377,16 @@ async def send_logo_then_welcome(m: Message):
         "💥 Доступно продвижение: платные сроки, ТОП (для событий), баннеры.\n"
         "👇 Выбирай действие из меню:"
     )
-    # печатаем «по буквам» (одно сообщение с редактированием)
-    msg = await m.answer(" ")
-    acc = ""
-    for ch in welcome_text:
-        acc += ch
-        try:
-            await msg.edit_text(acc)
-        except Exception:
-            pass
-        await asyncio.sleep(0.015)
-
+    # печатаем по буквам (одно сообщение с редактированием)
+msg = await m.answer("⌛ Загрузка приветствия...")
+acc = ""
+for ch in welcome_text:
+    acc += ch
+    try:
+        await msg.edit_text(acc)
+    except Exception:
+        pass
+    await asyncio.sleep(0.015)
     # показать до 3 активных баннеров
     banners = _load_banners()
     now = datetime.now()
