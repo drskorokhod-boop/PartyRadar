@@ -378,12 +378,17 @@ async def send_logo_then_welcome(m: Message):
         "👇 Выбирай действие из меню:"
     )
     # печатаем по буквам (одно сообщение с редактированием)
-msg = await m.answer("⌛ Загрузка приветствия...")
+try:
+    msg = await m.answer("⌛ Загрузка приветствия...")
+except Exception as e:
+    logging.error(f"Ошибка при отправке стартового сообщения: {e}")
+    return
+
 acc = ""
 for ch in welcome_text:
     acc += ch
     try:
-        await msg.edit_text(acc)
+        await msg.edit_text(acc, parse_mode="HTML")
     except Exception:
         pass
     await asyncio.sleep(0.015)
