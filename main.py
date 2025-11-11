@@ -128,9 +128,12 @@ def _load_users() -> Dict[str, dict]:
 
 def _save_users(data: Dict[str, dict]):
     _save_json(USERS_FILE, data)
-
 def _load_payments() -> Dict[str, dict]:
-    return _load_json(PAYMENTS_FILE, {})
+    data = _load_json(PAYMENTS_FILE, {})
+    # Исправление: если файл payments.json оказался списком, конвертируем его в словарь
+    if isinstance(data, list):
+        data = {}
+    return data
 
 def _save_payments(data: Dict[str, dict]):
     _save_json(PAYMENTS_FILE, data)
