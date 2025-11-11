@@ -379,7 +379,6 @@ async def send_logo_then_welcome(m: Message):
     )
 
     # печатаем по буквам (одно сообщение с редактированием)
-    try:
         # мгновенное отображение приветствия (без печати по буквам)
 await m.answer(welcome_text, parse_mode="HTML")
 
