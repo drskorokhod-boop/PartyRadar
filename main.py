@@ -600,16 +600,29 @@ if not link:
     await state.update_data(_pay_uuid=uuid)
     await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
 
-@dp.message(AddEvent.payment, F.text == "✅ Я оплатил")
+@dp.message_handler(AddEvent.payment, F.text == "✅ Я оплатил")
 async def ev_pay_check(m: Message, state: FSMContext):
-    data = await state.get_data()
-    uuid = data.get("_pay_uuid")
-    hours = data.get("paid_lifetime")
-    if not (uuid and hours):
-        return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
-    paid = await cc_is_paid(uuid)
-    if not paid:
-        return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
+    user_id = str(m.from_user.id)
+    payments = _load_payments()
+
+    if user_id not in payments:
+        await m.answer("❌ Оплата не найдена. Попробуйте через минуту снова.", reply_markup=kb_payment())
+        return
+
+    invoice_uuid = payments[user_id].get("invoice_uuid")
+    if not invoice_uuid:
+        await m.answer("⚠️ Ошибка: отсутствует идентификатор платежа.", reply_markup=kb_payment())
+        return
+
+    paid = await cc_is_paid(invoice_uuid)
+    if paid:
+        await m.answer("✅ Оплата подтверждена! Ваше событие будет опубликовано.", reply_markup=kb_upsell())
+        data = await state.get_data()
+        hours = data.get("paid_lifetime")
+        await publish_event(m, data, hours)
+        await state.set_state(AddEvent.upsell)
+    else:
+        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.", reply_markup=kb_payment())
     # публикуем событие
     data = data  # same
     await publish_event(m, data, hours)
