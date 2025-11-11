@@ -392,7 +392,7 @@ async def send_logo_then_welcome(m: Message):
             await msg.edit_text(acc, parse_mode="HTML")
         except Exception:
             pass
-        await asyncio.sleep(0.015)
+        await asyncio.sleep(0.003)
 
     # показать до 3 активных баннеров
     banners = _load_banners()
