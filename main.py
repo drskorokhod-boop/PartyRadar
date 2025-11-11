@@ -183,8 +183,11 @@ async def cc_is_paid(invoice_uuid: str) -> bool:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, timeout=30) as resp:
                 data = await resp.json()
-                status = data.get("result", {}).get("status")
-                return str(status).lower() == "paid"
+                status = data.get("result", {}).get("status") or data.get("result", {}).get("state")
+if not status:
+    logging.warning(f"CryptoCloud returned unexpected data: {data}")
+    return False
+return str(status).lower() == "paid"
     except Exception as e:
         logging.exception(f"CryptoCloud check error: {e}")
         return False
