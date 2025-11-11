@@ -138,13 +138,14 @@ def _load_payments() -> Dict[str, dict]:
 def _save_payments(data: Dict[str, dict]):
     _save_json(PAYMENTS_FILE, data)
 
-# ===================== CRYPTOCLOUD =====================
-async def cc_create_invoice(amount_usd: float, order_id: str, description: str) -> Tuple[Optional[str], Optional[str]]:
+# ============ CRYPTOCLOUD ============
+
+async def cc_create_invoice(amount_usd: float, order_id: str, description: str):
     """
-    Создаёт счёт в CryptoCloud. Возвращает (link, uuid) или (None, None) при ошибке.
+    Создаёт счёт в CryptoCloud. Возвращает (link, uuid) или (None, None)
     """
     if not CRYPTOCLOUD_API_KEY or not CRYPTOCLOUD_SHOP_ID:
-        logging.warning("⚠ CryptoCloud ключи не заданы")
+        logging.warning("⚠️ CryptoCloud ключи не заданы")
         return None, None
 
     url = "https://api.cryptocloud.plus/v2/invoice/create"
@@ -160,16 +161,35 @@ async def cc_create_invoice(amount_usd: float, order_id: str, description: str) 
         "description": description,
         "locale": "ru"
     }
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
                 data = await resp.json()
                 link = data.get("result", {}).get("link")
                 uuid = data.get("result", {}).get("uuid")
-                return link, uuid
+
+        # --- Сохраняем платёж в payments.json ---
+        try:
+            payments = _load_payments()
+            payments[str(order_id)] = {
+                "invoice_uuid": uuid,
+                "user_id": order_id,
+                "amount": amount_usd,
+                "description": description,
+                "timestamp": datetime.now().isoformat()
+            }
+            _save_payments(payments)
+            logging.info(f"✅ Платёж сохранён: {order_id} → {uuid}")
+        except Exception as e:
+            logging.error(f"Ошибка при сохранении платежа: {e}")
+
+        return link, uuid
+
     except Exception as e:
         logging.exception(f"CryptoCloud create error: {e}")
-    return None, None
+        return None, None
+
 
 async def cc_is_paid(invoice_uuid: str) -> bool:
     """
@@ -186,10 +206,13 @@ async def cc_is_paid(invoice_uuid: str) -> bool:
             async with session.get(url, headers=headers, timeout=30) as resp:
                 data = await resp.json()
                 status = data.get("result", {}).get("status") or data.get("result", {}).get("state")
-                if not status:
-                    logging.warning(f"CryptoCloud returned unexpected data: {data}")
-                    return False
-                return str(status).lower() == "paid"
+
+        if not status:
+            logging.warning(f"⚠️ CryptoCloud вернул неожиданные данные: {data}")
+            return False
+
+        return str(status).lower() == "paid"
+
     except Exception as e:
         logging.exception(f"CryptoCloud check error: {e}")
         return False
