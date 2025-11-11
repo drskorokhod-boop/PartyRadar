@@ -356,7 +356,7 @@ async def send_logo_then_welcome(m: Message):
     # показать лого, если есть
     logo_path = None
     for ext in ("png", "jpg", "jpeg"):
-        p = f"imgonline-com-ua-Resize-poVtNXt7aue6.png.{ext}"
+        p = f"imgonline-com-ua-Resize-poVtNXt7aue6{ext}"
         if os.path.exists(p):
             logo_path = p
             break
