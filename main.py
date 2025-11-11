@@ -380,19 +380,8 @@ async def send_logo_then_welcome(m: Message):
 
     # печатаем по буквам (одно сообщение с редактированием)
     try:
-        msg = await m.answer("⌛ Загрузка приветствия...")
-    except Exception as e:
-        logging.error(f"Ошибка при отправке стартового сообщения: {e}")
-        return
-
-    acc = ""
-    for ch in welcome_text:
-        acc += ch
-        try:
-            await msg.edit_text(acc, parse_mode="HTML")
-        except Exception:
-            pass
-        await asyncio.sleep(0)
+        # мгновенное отображение приветствия (без печати по буквам)
+await m.answer(welcome_text, parse_mode="HTML")
 
     # показать до 3 активных баннеров
     banners = _load_banners()
