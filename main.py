@@ -588,9 +588,11 @@ async def ev_pay_get(m: Message, state: FSMContext):
         return await m.answer("❌ Нет активного платного тарифа.", reply_markup=kb_payment())
     amount = TARIFFS_USD[hours]
     order_id = f"lifetime_{hours}_{m.from_user.id}_{int(datetime.now().timestamp())}"
-    link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: event lifetime {hours}h")
-    if not link:
-        return await m.answer("⚠ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
+    order_id = str(m.from_user.id)  # Используем Telegram ID как уникальный order_id
+link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: event lifetime {hours}h")
+
+if not link:
+    return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключи.", reply_markup=kb_payment())
     # сохраняем незавершённый платёж
     pay = _load_payments()
     pay[uuid] = {"type": "event_lifetime", "user_id": m.from_user.id, "payload": {"hours": hours, "data": data}}
