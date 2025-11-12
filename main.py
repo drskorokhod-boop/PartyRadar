@@ -606,7 +606,7 @@ async def ev_pay_get(m: Message, state: FSMContext):
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: event lifetime {hours}h")
 
 
-if not link:
+    if not link:
         return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключи.", reply_markup=kb_payment())
 
         # сохраняем незавершённый платёж
