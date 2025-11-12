@@ -628,38 +628,28 @@ async def ev_pay_get(m: Message, state: FSMContext):
 
 @dp.message(AddEvent.payment, F.text == "✅ Я оплатил")
 async def ev_pay_check(m: Message, state: FSMContext):
-    user_id = str(m.from_user.id)
-    payments = _load_payments()
+    data = await state.get_data()
+    invoice_uuid = data.get("_pay_uuid")
+    hours = data.get("paid_lifetime")
 
-    if user_id not in payments:
-        await m.answer("❌ Оплата не найдена. Попробуйте через минуту снова.", reply_markup=kb_payment())
-        return
-
-    invoice_uuid = payments[user_id].get("invoice_uuid")
     if not invoice_uuid:
-        await m.answer("⚠️ Ошибка: отсутствует идентификатор платежа.", reply_markup=kb_payment())
+        await m.answer("⚠️ Ошибка: не найден идентификатор счёта. Попробуйте заново получить ссылку на оплату.")
         return
 
-    paid = await cc_is_paid(invoice_uuid)
+    await m.answer("🔍 Проверяю оплату...")
+    print(f"[PAYMENT CHECK] invoice_uuid={invoice_uuid}")
+print(f"[PAYMENT DATA] {data}")
+
+paid = await cc_is_paid(invoice_uuid)
+
+print(f"[PAYMENT STATUS] paid={paid}")
+
     if paid:
-        await m.answer("✅ Оплата подтверждена! Ваше событие будет опубликовано.", reply_markup=kb_upsell())
-        data = await state.get_data()
-        hours = data.get("paid_lifetime")
+        await m.answer("✅ Оплата подтверждена! Ваше событие будет опубликовано.")
         await publish_event(m, data, hours)
         await state.set_state(AddEvent.upsell)
     else:
-        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.", reply_markup=kb_payment())
-    # публикуем событие
-    data = data  # same
-    await publish_event(m, data, hours)
-    await state.set_state(AddEvent.upsell)
-    await m.answer(
-        "✅ Событие опубликовано!\n\n"
-        "💡 Доп. опция:\n"
-        f"• ⭐ ТОП 7 дней — ${PRICES['top_week']}\n\n"
-        "Выберите опцию или разместите бесплатно.",
-        reply_markup=kb_upsell()
-    )
+        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
 
 @dp.message(AddEvent.payment, F.text == "⬅ Назад")
 async def ev_pay_back(m: Message, state: FSMContext):
