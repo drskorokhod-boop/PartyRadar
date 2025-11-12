@@ -610,9 +610,15 @@ async def ev_pay_get(m: Message, state: FSMContext):
     if not link:
         return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключ.", reply_markup=kb_payment())
 
-    pay = _load_payments()
-    pay[uuid] = {"type": "event_lifetime", "user_id": m.from_user.id, "payload": {"hours": hours, "data": data}}
-    _save_payments(pay)
+    # сохраняем платёж по user_id, чтобы потом можно было найти при проверке
+pay = _load_payments()
+pay[str(m.from_user.id)] = {
+    "type": "event_lifetime",
+    "user_id": m.from_user.id,
+    "invoice_uuid": uuid,
+    "payload": {"hours": hours, "data": data}
+}
+_save_payments(pay)
 
     await state.update_data(_pay_uuid=uuid)
     await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите ✅ Я оплатил.", reply_markup=kb_payment())
