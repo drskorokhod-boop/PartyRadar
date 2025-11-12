@@ -216,6 +216,20 @@ async def cc_is_paid(invoice_uuid: str) -> bool:
     except Exception as e:
         logging.exception(f"CryptoCloud check error: {e}")
         return False
+        
+        # ======== TEST PAYMENT CHECK ========
+@dp.message_handler(commands=["testpay"])
+async def test_payment_status(m: types.Message):
+    await m.answer("🔍 Проверяю последний платёж...")
+    payments = _load_payments()
+    user_id = str(m.from_user.id)
+    if user_id not in payments:
+        await m.answer("❌ В payments.json нет записей о платеже.")
+        return
+    invoice_uuid = payments[user_id].get("invoice_uuid")
+    paid = await cc_is_paid(invoice_uuid)
+    await m.answer(f"🧾 Статус: {'✅ Оплачен' if paid else '❌ Не найден'}\nUUID: {invoice_uuid}")
+    
 
 # ===================== FSM =====================
 class AddEvent(StatesGroup):
