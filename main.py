@@ -604,22 +604,21 @@ async def ev_pay_get(m: Message, state: FSMContext):
         return await m.answer("❌ Нет активного платного тарифа.", reply_markup=kb_payment())
     amount = TARIFFS_USD[hours]
     order_id = f"lifetime_{hours}_{m.from_user.id}_{int(datetime.now().timestamp())}"
-    order_id = str(m.from_user.id)  # Используем Telegram ID как уникальный order_id
+    order_id = str(m.from_user.id)
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: event lifetime {hours}h")
 
-
     if not link:
-        return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключи.", reply_markup=kb_payment())
+        return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключ.", reply_markup=kb_payment())
 
-        # сохраняем незавершённый платёж
-        pay = _load_payments()
-        pay[uuid] = {"type": "event_lifetime", "user_id": m.from_user.id, "payload": {"hours": hours, "data": data}}
-        _save_payments(pay)
+    pay = _load_payments()
+    pay[uuid] = {"type": "event_lifetime", "user_id": m.from_user.id, "payload": {"hours": hours, "data": data}}
+    _save_payments(pay)
 
-        await state.update_data(pay_uuid=uuid)
-        await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите ✅ «Я оплатил».", reply_markup=kb_payment())
+    await state.update_data(_pay_uuid=uuid)
+    await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите ✅ Я оплатил.", reply_markup=kb_payment())
 
-@dp.message_handler(AddEvent.payment, F.text == "✅ Я оплатил")
+
+@dp.message(AddEvent.payment, F.text == "✅ Я оплатил")
 async def ev_pay_check(m: Message, state: FSMContext):
     user_id = str(m.from_user.id)
     payments = _load_payments()
