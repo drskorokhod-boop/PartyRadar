@@ -606,7 +606,7 @@ async def ev_pay_get(m: Message, state: FSMContext):
     link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar: event lifetime {hours}h")
 
 if not link:
-    return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключи.", reply_markup=kb_payment())
+       return await m.answer("⚠️ Не удалось получить ссылку на счёт. Проверь API ключи.", reply_markup=kb_payment())
     # сохраняем незавершённый платёж
     pay = _load_payments()
     pay[uuid] = {"type": "event_lifetime", "user_id": m.from_user.id, "payload": {"hours": hours, "data": data}}
