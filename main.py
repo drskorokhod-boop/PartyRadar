@@ -218,8 +218,10 @@ async def cc_is_paid(invoice_uuid: str) -> bool:
         return False
         
         # ======== TEST PAYMENT CHECK ========
-@dp.message_handler(commands=["testpay"])
-async def test_payment_status(m: types.Message):
+from aiogram.filters import Command
+
+@dp.message(Command("testpay"))
+async def test_payment_status(m: Message):
     await m.answer("🔍 Проверяю последний платёж...")
     payments = _load_payments()
     user_id = str(m.from_user.id)
