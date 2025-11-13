@@ -645,11 +645,11 @@ paid = await cc_is_paid(invoice_uuid)
 print(f"[PAYMENT STATUS] paid={paid}")
 
 if paid:
-        await m.answer("✅ Оплата подтверждена! Ваше событие будет опубликовано.")
-        await publish_event(m, data, hours)
-        await state.set_state(AddEvent.upsell)
-    else:
-        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
+    await m.answer("☑️ Оплата подтверждена! Ваше событие будет опубликовано.")
+    await publish_event(m, data, hours)
+    await state.set_state(AddEvent.upsell)
+else:
+    await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
 
 @dp.message(AddEvent.payment, F.text == "⬅ Назад")
 async def ev_pay_back(m: Message, state: FSMContext):
