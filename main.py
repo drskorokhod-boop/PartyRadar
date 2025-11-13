@@ -882,18 +882,18 @@ await m.answer(
 
 @dp.message(AddBanner.link)
 async def banner_link(m: Message, state: FSMContext):
-    if m.text == "◀️ Назад":
-    await state.set_state(AddBanner.description)
-    return await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_skip_back())
+    if m.text == "⬅️ Назад":
+        await state.set_state(AddBanner.description)
+        return await m.answer("✏️ Добавьте описание (или «Пропустить».", reply_markup=kb_skip_back())
 
-link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
-await state.update_data(b_link=link)
-await state.set_state(AddBanner.duration)
+    link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
+    await state.update_data(b_link=link)
+    await state.set_state(AddBanner.duration)
 
-await m.answer(
-    "⏳ Выберите срок показа баннера:",
-    reply_markup=kb_banner_duration()
-)
+    await m.answer(
+        "⏳ Выберите срок показа баннера:",
+        reply_markup=kb_banner_duration()
+    )
 
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
