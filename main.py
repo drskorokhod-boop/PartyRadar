@@ -457,7 +457,11 @@ def _safe_dt(s: Optional[str]) -> Optional[datetime]:
         return None
 
 @dp.message(Command("start"))
-async def start_cmd(m: Message):
+async def start_cmd(m: Message, state: FSMContext):
+
+    # Полный сброс FSM — решает зависание старых шагов
+    await state.clear()
+
     await send_logo_then_welcome(m)
     await m.answer("Главное меню:", reply_markup=kb_main())
 
