@@ -262,7 +262,6 @@ class AddBanner(StatesGroup):
     media = State()
     description = State()
     link = State()
-    geolocation = State()
     duration = State()
     payment = State()
     extend = State()
@@ -299,8 +298,7 @@ def kb_categories():
 def kb_media_step():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-            [KeyboardButton(text="⬅ Назад")]
+            [KeyboardButton(text="← Назад")]
         ],
         resize_keyboard=True
     )
