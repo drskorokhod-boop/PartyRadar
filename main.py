@@ -295,14 +295,6 @@ def kb_categories():
         resize_keyboard=True
     )
 
-def kb_media_step():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="← Назад")]
-        ],
-        resize_keyboard=True
-    )
-
 def kb_lifetime():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -883,49 +875,14 @@ async def banner_link(m: Message, state: FSMContext):
         return await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_back())
     link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
     await state.update_data(b_link=link)
-    await state.set_state(AddBanner.geolocation)
-    await m.answer(
-        "📍 Отправьте геолокацию (для кнопки «Показать на карте»). Можно «Пропустить».",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                [KeyboardButton(text="Пропустить"), KeyboardButton(text="⬅ Назад")]
-            ],
-            resize_keyboard=True
-        )
     )
-
-@dp.message(AddBanner.geolocation, F.location)
-async def banner_geo_ok(m: Message, state: FSMContext):
-    await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
-    await state.set_state(AddBanner.duration)
-    await m.answer("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
-
-@dp.message(AddBanner.geolocation, F.text)
-async def banner_geo_skip_or_back(m: Message, state: FSMContext):
-    t = m.text.strip()
-    if t == "⬅ Назад":
-        await state.set_state(AddBanner.link)
-        return await m.answer("🔗 Укажите ссылку (или «Пропустить»).", reply_markup=kb_back())
-    if t.lower() == "пропустить":
-        await state.update_data(b_lat=None, b_lon=None)
-        await state.set_state(AddBanner.duration)
-        return await m.answer("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
-    await m.answer("⚠ Отправьте геолокацию или напишите «Пропустить».", reply_markup=ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                  [KeyboardButton(text="Пропустить"), KeyboardButton(text="⬅ Назад")]],
-        resize_keyboard=True
-    ))
 
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
-    if m.text == "⬅ Назад":
-        await state.set_state(AddBanner.geolocation)
-        return await m.answer("📍 Отправьте геолокацию (или «Пропустить»).", reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-                      [KeyboardButton(text="Пропустить"), KeyboardButton(text="⬅ Назад")]],
-            resize_keyboard=True
-        ))
+    if m.text == "⬅️ Назад":
+        await state.set_state(AddBanner.link)
+        return await m.answer("🔗 Укажите ссылку (или «Пропустить»).", reply_markup=kb_back())
+
     if m.text not in BANNER_DURATIONS:
         return await m.answer("Выберите один из вариантов:", reply_markup=kb_banner_duration())
 
@@ -934,11 +891,12 @@ async def banner_duration(m: Message, state: FSMContext):
     await state.set_state(AddBanner.payment)
 
     desc = (
-        "🖼 <b>Баннер</b>\n"
-        "Можно разместить: картинку/видео, текст, ссылку и (по желанию) точку на карте.\n"
+        "<b>📢 Баннер</b>\n"
+        "Можно разместить: картинку/видео, текст, ссылку.\n"
         "Баннер показывается всем пользователям после приветствия (в ротации до 3 шт.).\n\n"
-        f"Срок показа: {days} дн.\nСтоимость: ${amount}\n\n"
-        "Нажмите «💳 Получить ссылку на оплату»."
+        f"📅 Срок показа: {days} дн.\n"
+        f"💵 Стоимость: ${amount}\n\n"
+        "Нажмите ➜ «📎 Получить ссылку на оплату»."
     )
     await m.answer(desc, reply_markup=kb_payment())
 
