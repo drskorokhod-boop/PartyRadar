@@ -875,7 +875,6 @@ async def banner_link(m: Message, state: FSMContext):
         return await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_back())
     link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
     await state.update_data(b_link=link)
-    )
 
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
