@@ -198,7 +198,7 @@ async def cc_is_paid(invoice_uuid: str) -> bool:
     if not (CRYPTOCLOUD_API_KEY and invoice_uuid):
         return False
 
-    url = f"https://api.cryptocloud.plus/v2/invoice/info/{invoice_uuid}"
+    url = f"https://api.cryptocloud.plus/v2/invoice/info?uuid={invoice_uuid}"
     headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
 
     try:
