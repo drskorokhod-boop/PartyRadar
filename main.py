@@ -860,21 +860,40 @@ async def banner_media_wrong(m: Message, state: FSMContext):
 
 @dp.message(AddBanner.description)
 async def banner_desc(m: Message, state: FSMContext):
-    if m.text == "⬅ Назад":
-        await state.set_state(AddBanner.media)
-        return await m.answer("Пришлите фото/видео баннера.", reply_markup=kb_back())
-    text = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
-    await state.update_data(b_text=text)
-    await state.set_state(AddBanner.link)
-    await m.answer("🔗 Укажите ссылку для связи (сайт/соцсеть/e-mail) или «Пропустить».", reply_markup=kb_back())
+    if m.text == "◀️ Назад":
+    await state.set_state(AddBanner.media)
+    return await m.answer("📸 Пришлите фото или видео баннера.", reply_markup=kb_back())
+
+text = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
+await state.update_data(b_text=text)
+await state.set_state(AddBanner.link)
+
+await m.answer(
+    "🔗 Теперь укажите ссылку, по которой пользователи смогут связаться с вами.\n"
+    "Это может быть:\n"
+    "• сайт\n"
+    "• Instagram/TikTok\n"
+    "• Telegram\n"
+    "• WhatsApp\n"
+    "• e-mail\n\n"
+    "Или нажмите «Пропустить».",
+    reply_markup=kb_skip_back()
+)
 
 @dp.message(AddBanner.link)
 async def banner_link(m: Message, state: FSMContext):
-    if m.text == "⬅ Назад":
-        await state.set_state(AddBanner.description)
-        return await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_back())
-    link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
-    await state.update_data(b_link=link)
+    if m.text == "◀️ Назад":
+    await state.set_state(AddBanner.description)
+    return await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_skip_back())
+
+link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
+await state.update_data(b_link=link)
+await state.set_state(AddBanner.duration)
+
+await m.answer(
+    "⏳ Выберите срок показа баннера:",
+    reply_markup=kb_banner_duration()
+)
 
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
