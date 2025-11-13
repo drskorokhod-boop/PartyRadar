@@ -861,8 +861,8 @@ async def banner_media_wrong(m: Message, state: FSMContext):
 @dp.message(AddBanner.description)
 async def banner_desc(m: Message, state: FSMContext):
     if m.text == "◀️ Назад":
-    await state.set_state(AddBanner.media)
-    return await m.answer("📸 Пришлите фото или видео баннера.", reply_markup=kb_back())
+        await state.set_state(AddBanner.media)
+        return await m.answer("📸 Пришлите фото или видео баннера.", reply_markup=kb_back())
 
 text = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
 await state.update_data(b_text=text)
