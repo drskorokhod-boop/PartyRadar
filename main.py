@@ -620,11 +620,13 @@ async def ev_pay_get(m: Message, state: FSMContext):
     }
     _save_payments(pay)
 
+    # ВАЖНО: сохраняем uuid в FSM сейчас
     await state.update_data(_pay_uuid=uuid)
+
     await m.answer(
         f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите ✅ Я оплатил.",
         reply_markup=kb_payment()
-    )    
+    )
 
 @dp.message(AddEvent.payment, F.text == "✅ Я оплатил")
 async def ev_pay_check(m: Message, state: FSMContext):
