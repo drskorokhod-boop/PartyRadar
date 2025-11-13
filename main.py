@@ -193,25 +193,36 @@ async def cc_create_invoice(amount_usd: float, order_id: str, description: str):
 
 async def cc_is_paid(invoice_uuid: str) -> bool:
     """
-    Проверяет статус счёта. Возвращает True, если оплачен.
+    Проверяет статус счёта в CryptoCloud.
+    Возвращает True, если счёт оплачен.
     """
     if not (CRYPTOCLOUD_API_KEY and invoice_uuid):
         return False
 
-    url = f"https://api.cryptocloud.plus/v2/invoice/info?uuid={invoice_uuid}"
+    url = "https://api.cryptocloud.plus/v2/invoice/merchant/info"
     headers = {"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"}
+    payload = {"uuids": [invoice_uuid]}
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=30) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
                 data = await resp.json()
-                status = data.get("result", {}).get("status") or data.get("result", {}).get("state")
+                print("[CC PAY RAW]", data)
 
-        if not status:
-            logging.warning(f"⚠️ CryptoCloud вернул неожиданные данные: {data}")
+        if data.get("status") != "success":
+            logging.warning(f"⚠️ CryptoCloud вернул ошибку: {data}")
             return False
 
-        return str(status).lower() == "paid"
+        result = data.get("result") or []
+        if not result:
+            logging.warning(f"⚠️ CryptoCloud вернул пустой result: {data}")
+            return False
+
+        invoice = result[0]
+        status = (invoice.get("status") or "").lower()
+        print(f"[CC PAY STATUS] uuid={invoice_uuid} status={status}")
+
+        return status in ("paid", "overpaid")
 
     except Exception as e:
         logging.exception(f"CryptoCloud check error: {e}")
