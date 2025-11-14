@@ -17,7 +17,7 @@ from aiohttp import web
 from geopy.distance import geodesic
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -367,8 +367,29 @@ async def upsell_top(m: Message, state: FSMContext):
 
 @dp.message_handler(lambda m: m.text == "📣 Баннер на главной", state="*")
 async def upsell_banner(m: Message, state: FSMContext):
+
+    # === Глобальный лимит максимум 3 активных баннера ===
+    banners = _load_banners()
+    now_ts = int(datetime.now().timestamp())
+
+    active_banners = [
+        b for b in banners
+        if b.get("banner_expire", 0) > now_ts
+    ]
+
+    if len(active_banners) >= 3:
+        return await m.answer(
+            "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
+            "Подождите, пока один из баннеров истечёт, или удалите вручную.",
+            reply_markup=kb_main()
+        )
+
+    # Если лимит не превышен — продолжаем
     await state.update_data(opt_type="banner")
-    await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
+    await m.answer(
+        "Отправьте ссылку для баннера:",
+        reply_markup=kb_back()
+    )
     await state.set_state(AddBanner.link)
 
 
@@ -1033,7 +1054,7 @@ async def search_start(m: Message):
         reply_markup=kb
     )
 
-@dp.message(F.location)
+@dp.message(StateFilter(None), F.location)
 async def search_with_location(m: Message):
     # сохраняем слепок локации пользователя
     users = _load_users()
