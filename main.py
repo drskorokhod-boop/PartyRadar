@@ -858,10 +858,6 @@ if data.get("opt_type") == "push":
         dlon = radians(lon1 - lon0)
         a = sin(dlat/2)**2 + cos(radians(lat0))*cos(radians(lat1))*sin(dlon/2)**2
         return R * 2 * atan2(sqrt(a), sqrt(1-a))
-
-    await state.clear()
-    return
-    else:
         await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
         
 @dp.message(AddEvent.payment, F.text == "⬅ Назад")
