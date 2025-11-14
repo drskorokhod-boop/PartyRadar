@@ -380,8 +380,6 @@ def kb_upsell():
         resize_keyboard=True
     )
 
-)
-
 # =================== UPSSELL HANDLERS ===================
 
 @dp.message_handler(lambda m: m.text == "⭐ Продвижение ТОП", state="*")
