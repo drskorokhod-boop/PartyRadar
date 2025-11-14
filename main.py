@@ -343,13 +343,12 @@ def kb_upsell():
 
 def kb_banner_duration():
     rows = [
-        [KeyboardButton(text="📆 1 день"), KeyboardButton(text="📆 3 дня")],
-        [KeyboardButton(text="📆 7 дней"), KeyboardButton(text="📆 14 дней")],
-        [KeyboardButton(text="📆 30 дней")],
+        [KeyboardButton(text="📅 1 день"), KeyboardButton(text="📅 3 дня")],
+        [KeyboardButton(text="📅 7 дней"), KeyboardButton(text="📅 14 дней")],
+        [KeyboardButton(text="📅 30 дней")],
         [KeyboardButton(text="⬅ Назад")]
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
-
 # ===================== TEXT HELPERS =====================
 def sanitize(text: str) -> str:
     return re.sub(r"[^\S\r\n]+", " ", text or "").strip()
