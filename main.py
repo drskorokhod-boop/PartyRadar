@@ -839,69 +839,70 @@ async def ev_pay_check(m: Message, state: FSMContext):
         _save_banners(banners)
         await m.answer("📣 Баннер загружен и появится на главном экране!")
         # если выбрана Push-рассылка
-if data.get("opt_type") == "push":
-    users = _load_users()
-    sent = 0
-    errors = 0
+                if data.get("opt_type") == "push":
+        users = _load_users()
+        sent = 0
+        errors = 0
 
-    # координаты автора события или последнего местоположения
-    my_loc = users.get(str(m.from_user.id), {}).get("last_location")
-    if not my_loc:
-        return await m.answer("❌ Не найдено ваше местоположение для вычисления радиуса.", reply_markup=kb_main())
+        # координаты автора события или последнего местоположения
+        my_loc = users.get(str(m.from_user.id), {}).get("last_location")
+        if not my_loc:
+            return await m.answer(
+                "❌ Не найдено ваше местоположение для вычисления радиуса.",
+                reply_markup=kb_main()
+            )
 
-    lat0, lon0 = my_loc["lat"], my_loc["lon"]
+        lat0, lon0 = my_loc["lat"], my_loc["lon"]
 
-    def distance(lat1, lon1):
-        from math import radians, sin, cos, sqrt, atan2
-        R = 6371
-        dlat = radians(lat1 - lat0)
-        dlon = radians(lon1 - lon0)
-        a = sin(dlat/2)**2 + cos(radians(lat0))*cos(radians(lat1))*sin(dlon/2)**2
-        return R * 2 * atan2(sqrt(a), sqrt(1-a))
-        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
-        
-@dp.message(AddEvent.payment, F.text == "⬅ Назад")
+        def distance(lat1, lon1):
+            from math import radians, sin, cos, sqrt, atan2
+            R = 6371
+            dlat = radians(lat1 - lat0)
+            dlon = radians(lon1 - lon0)
+            a = sin(dlat/2)**2 + cos(radians(lat0)) * cos(radians(lat1)) * sin(dlon/2)**2
+            return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.") 
+@dp.message(AddEvent.payment, F.text == "← Назад")
 async def ev_pay_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.lifetime)
-    await m.answer("⏳ Вернулись к выбору срока:", reply_markup=kb_lifetime())
+    await m.answer("🔙 Вернулись к выбору срока:", reply_markup=kb_lifetime())
 
 @dp.message(AddEvent.upsell)
 async def ev_upsell(m: Message, state: FSMContext):
     txt = m.text
 
     # 🔥 Новый пункт меню — выбор сроков ТОП-продвижения
-if txt == "🌐 Разместить бесплатно (без опций)":
-    await state.clear()
-    return await m.answer("✅ Готово! Событие опубликовано.", reply_markup=kb_main())
+    if txt == "🌐 Разместить бесплатно (без опций)":
+        await state.clear()
+        return await m.answer("✔️ Готово! Событие опубликовано.", reply_markup=kb_main())
 
-# Ловим выбор срока ТОП-продвижения (кнопки вида «⭐ 7 дней – $25» и т.п.)
-if txt.startswith("⭐ "):
-    try:
-        # Берём число дней из текста кнопки
-        days = int(txt.split()[1])  # после «⭐»
-    except Exception:
-        return await m.answer("❌ Ошибка: не удалось определить срок.", reply_markup=kb_top_duration())
+    # Ловим выбор срока ТОП-продвижения
+    if txt.startswith("⭐ "):
+        try:
+            days = int(txt.split()[1])
+        except Exception:
+            return await m.answer("❌ Ошибка: не удалось определить срок.", reply_markup=kb_top_duration())
 
-    if days not in TOP_PRICES:
-        return await m.answer("❌ Ошибка: такого срока нет.", reply_markup=kb_top_duration())
+        if days not in TOP_PRICES:
+            return await m.answer("❌ Ошибка: такого срока нет.", reply_markup=kb_top_duration())
 
-    price = TOP_PRICES[days]
+        price = TOP_PRICES[days]
 
-    await state.set_state(AddEvent.pay_option)
-    await state.update_data(
-        opt_type="top",
-        opt_event_id=current["id"],
-        opt_days=days,
-        _pay_uuid=None,
-    )
+        await state.set_state(AddEvent.pay_option)
+        await state.update_data(
+            opt_type="top",
+            opt_event_id=current["id"],
+            opt_days=days,
+            _pay_uuid=None,
+        )
 
-    return await m.answer(
-        f"⭐ ТОР на {days} дней\n\nСтоимость: ${price}\n\nНажмите «Получить ссылку на оплату».",
-        reply_markup=kb_payment(),
-    )
+        return await m.answer(
+            f"⭐ TOP на {days} дней\n\nСтоимость: ${price}\n\nНажмите «Получить ссылку на оплату».",
+            reply_markup=kb_payment(),
+        )
 
-return await m.answer("Выберите опцию из меню.", reply_markup=kb_upsell())
-
+    return await m.answer("Выберите опцию из меню.", reply_markup=kb_upsell())
 @dp.message(AddEvent.pay_option, F.text == "💳 Получить ссылку на оплату")
 async def ev_opt_link(m: Message, state: FSMContext):
     data = await state.get_data()
