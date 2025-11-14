@@ -15,7 +15,6 @@ from typing import Optional, Tuple, Dict, Any, List
 import aiohttp
 from aiohttp import web
 from geopy.distance import geodesic
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -132,6 +131,33 @@ def _load_banners() -> List[dict]:
 def _save_banners(data: List[dict]):
     _save_json(BANNERS_FILE, data)
 
+# === AUTO CLEANUP OF EXPIRED BANNERS ===
+
+import asyncio
+from datetime import datetime
+
+async def cleanup_banners():
+    banners = _load_banners()
+    now = datetime.utcnow().timestamp()
+
+    # Фильтруем только актуальные баннеры
+    active = [b for b in banners if b.get("expires_at", 0) > now]
+
+    if len(active) != len(banners):
+        removed = len(banners) - len(active)
+        print(f"[CLEANUP] Удалено {removed} истёкших баннеров")
+        _save_banners(active)
+
+    return len(active)
+
+async def banner_cleanup_scheduler():
+    while True:
+        try:
+            await cleanup_banners()
+        except Exception as e:
+            print("[CLEANUP ERROR]", e)
+
+        await asyncio.sleep(300)  # каждые 5 минут
 def _load_users() -> Dict[str, dict]:
     return _load_json(USERS_FILE, {})
 
@@ -1207,8 +1233,14 @@ async def banner_geo_skip(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "bn_geo_back")
 async def banner_geo_back(cq: CallbackQuery, state: FSMContext):
+    # Возврат на шаг ссылки
     await state.set_state(AddBanner.link)
-    await cq.message.edit_text("🔗 Укажите ссылку (или «Пропустить»).")
+
+    await cq.message.edit_text(
+        "🔗 Укажите ссылку (или «Пропустить»).",
+        reply_markup=kb_skip_back()
+    )
+
     await cq.answer()
 
 # === Обработка фактического получения локации ===
@@ -1582,17 +1614,61 @@ async def cleanup_daemon():
 
 # ===================== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ =====================
 @dp.message(F.text == "⬅ Назад")
-async def global_back(m: Message, state: FSMContext):
-    # Если в FSM — откатываем на предыдущий шаг по логике состояний,
-    # иначе — в главное меню.
+async def banner_back_router(m: Message, state: FSMContext):
+
     st = await state.get_state()
-    if not st:
-        return await m.answer("Главное меню:", reply_markup=kb_main())
 
-    # Ручная логика «назад» уже покрыта в каждом step-хэндлере; если что — общая защёлка:
+    # === Создание баннера ===
+
+    # 1) Назад из описания → в загрузку медиа
+    if st == AddBanner.description:
+        await state.set_state(AddBanner.media)
+        return await m.answer("📸 Загрузите фото/видео баннера:", reply_markup=kb_back())
+
+    # 2) Назад из ввода ссылки → в описание
+    if st == AddBanner.link:
+        await state.set_state(AddBanner.description)
+        return await m.answer("✏️ Добавьте описание баннера:", reply_markup=kb_skip_back())
+
+    # 3) Назад из выбора способа локации → в шаг со ссылкой
+    if st == "await_banner_geo":
+        await state.set_state(AddBanner.link)
+        return await m.answer(
+            "🔗 Укажите ссылку (или «Пропустить»).",
+            reply_markup=kb_skip_back()
+        )
+
+    # 4) Назад из «Отправить геолокацию» или «Выбрать на карте» → в меню выбора типа локации
+    if st == "await_banner_geo_my" or st == "await_banner_geo_point":
+        await state.set_state("await_banner_geo")
+        return await m.answer(
+            "📍 Укажите локацию баннера (необязательно):\n"
+            "- можно отправить свою геолокацию,\n"
+            "- выбрать точку на карте,\n"
+            "- или пропустить этот шаг.",
+            reply_markup=kb_banner_location
+        )
+
+    # 5) Назад из выбора длительности → вернуться к выбору локации
+    if st == AddBanner.duration:
+        await state.set_state("await_banner_geo")
+        return await m.answer(
+            "📍 Укажите локацию баннера (необязательно):",
+            reply_markup=kb_banner_location
+        )
+
+    # 6) Назад из оплаты → в выбор длительности
+    if st == AddBanner.payment:
+        await state.set_state(AddBanner.duration)
+        return await m.answer(
+            "⏳ Выберите срок показа баннера:",
+            reply_markup=kb_banner_duration()
+        )
+
+    # === Если состояние неизвестно → отправляем в главное меню ===
     await state.clear()
-    await m.answer("Главное меню:", reply_markup=kb_main())
-
+    return await m.answer("Главное меню:", reply_markup=kb_main())
+    
 @dp.message()
 async def fallback(m: Message):
     if not m.text:
