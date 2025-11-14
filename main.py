@@ -404,11 +404,11 @@ async def upsell_banner(m: Message, state: FSMContext):
     ]
 
     if len(active_banners) >= 3:
-        return await m.answer(
-            "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
-            "Подождите, пока один из баннеров истечёт, или удалите вручную.",
-            reply_markup=kb_main()
-        )
+    return await m.answer(
+        "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
+        "Подождите, пока один из баннеров истечёт, или удалите вручную.",
+        reply_markup=kb_main()
+    )
 
     # Если лимит не превышен — продолжаем
     await state.update_data(opt_type="banner")
