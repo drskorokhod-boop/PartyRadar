@@ -334,9 +334,11 @@ def kb_payment():
 def kb_upsell():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="⭐ ТОП (7 дней)")],
+            [KeyboardButton(text="⭐ Продвижение ТОП")],
+            [KeyboardButton(text="📢 Баннер на главной")],
+            [KeyboardButton(text="📨 Push-рассылка (30 км)")],
             [KeyboardButton(text="🌍 Разместить бесплатно (без опций)")],
-            [KeyboardButton(text="⬅ Назад")]
+            [KeyboardButton(text="← Назад")]
         ],
         resize_keyboard=True
     )
@@ -349,6 +351,39 @@ def kb_banner_duration():
         [KeyboardButton(text="⬅️ Назад")]
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+def kb_top_duration():
+    rows = [
+        [KeyboardButton(text="⭐ 1 день – $5"), KeyboardButton(text="⭐ 3 дня – $15")],
+        [KeyboardButton(text="⭐ 7 дней – $25"), KeyboardButton(text="⭐ 14 дней – $45")],
+        [KeyboardButton(text="⭐ 30 дней – $90")],
+        [KeyboardButton(text="← Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+# ======== ПЛАТНЫЕ ТАРИФЫ ========
+
+# Тарифы баннера (цены в USD)
+BANNER_PRICES = {
+    "📅 1 день – $12": 12,
+    "📅 3 дня – $25": 25,
+    "📅 7 дней – $35": 35,
+    "📅 14 дней – $70": 70,
+    "📅 30 дней – $180": 180,
+}
+
+# Тарифы TOP (цены в USD)
+TOP_PRICES = {
+    "⭐ ТОП на 1 день – $5": 5,
+    "⭐ ТОП на 3 дня – $12": 12,
+    "⭐ ТОП на 7 дней – $25": 25,
+    "⭐ ТОП на 14 дней – $45": 45,
+    "⭐ ТОП на 30 дней – $90": 90,
+}
+
+# Стоимость push-рассылки в радиусе 30 км
+PUSH_PRICE_USD = 5
+
 # ===================== TEXT HELPERS =====================
 def sanitize(text: str) -> str:
     return re.sub(r"[^\S\r\n]+", " ", text or "").strip()
@@ -680,9 +715,19 @@ async def ev_pay_back(m: Message, state: FSMContext):
 @dp.message(AddEvent.upsell)
 async def ev_upsell(m: Message, state: FSMContext):
     txt = m.text
-    if txt == "⬅ Назад":
+
+    # 🔥 Новый пункт меню — выбор сроков ТОП-продвижения
+    if txt == "⭐ Продвижение ТОП":
+        await state.set_state(AddEvent.top_duration)
+        return await m.answer(
+            "Выберите срок для продвижения ТОП:",
+            reply_markup=kb_top_duration()
+        )
+
+    if txt == "← Назад":
         await state.clear()
         return await m.answer("Главное меню:", reply_markup=kb_main())
+
     events = _load_events()
     my = [e for e in events if e["author"] == m.from_user.id]
     if not my:
@@ -692,59 +737,90 @@ async def ev_upsell(m: Message, state: FSMContext):
     if txt == "🌍 Разместить бесплатно (без опций)":
         await state.clear()
         return await m.answer("✅ Готово! Событие опубликовано.", reply_markup=kb_main())
-    if txt == "⭐ ТОП (7 дней)":
-        await state.set_state(AddEvent.pay_option)
-        await state.update_data(opt_type="top", opt_event_id=current["id"], _pay_uuid=None)
-        return await m.answer(
-            f"⭐ <b>ТОП на 7 дней</b> — событие будет показано первым в выдаче.\n"
-            f"Стоимость: ${PRICES['top_week']}\n\n"
-            "Нажмите «💳 Получить ссылку на оплату».",
-            reply_markup=kb_payment()
-        )
+    if txt == "🎯 ТОП (7 дней)":
+    await state.set_state(AddEvent.pay_option)
+    await state.update_data(opt_type="top", opt_event_id=current["id"], _pay_uuid=None)
+    return await m.answer(
+        f"🎯ТОП на 7 дней\n\nСтоимость: {PRICES['top_week']}\n\nНажмите «Получить ссылку на оплату».",
+        reply_markup=kb_payment()
+    )
     return await m.answer("Выберите опцию из меню:", reply_markup=kb_upsell())
 
 @dp.message(AddEvent.pay_option, F.text == "💳 Получить ссылку на оплату")
 async def ev_opt_link(m: Message, state: FSMContext):
     data = await state.get_data()
-    opt = data.get("opt_type")
+    opt_type = data.get("opt_type")
     ev_id = data.get("opt_event_id")
-    if not (opt and ev_id):
+    days = data.get("opt_days")
+
+    if not (opt_type and ev_id):
         return await m.answer("❌ Опция не выбрана.", reply_markup=kb_upsell())
-    amount = PRICES["top_week"]
-    order_id = f"{opt}_{ev_id}_{m.from_user.id}_{int(datetime.now().timestamp())}"
-    link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar event {opt}")
+
+    price = PRICES.get(opt_type)
+    if not price:
+        return await m.answer("❌ Ошибка: цена не найдена.", reply_markup=kb_upsell())
+
+    order_id = f"{opt_type}_{ev_id}_{int(datetime.now().timestamp())}"
+    link = await cc_create_invoice(price, order_id, f"PartyRadar ТОП {days} дней")
+
     if not link:
-        return await m.answer("⚠ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
-    # save payment
+        return await m.answer("❌ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
+
     pay = _load_payments()
-    pay[uuid] = {"type": "event_top", "user_id": m.from_user.id, "payload": {"event_id": ev_id}}
+    pay[link["uuid"]] = {
+        "type": "event_top",
+        "user_id": m.from_user.id,
+        "payload": {"event_id": ev_id, "days": days}
+    }
     _save_payments(pay)
 
-    await state.update_data(_pay_uuid=uuid)
-    await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
+    await state.update_data(_pay_uuid=link["uuid"])
 
+    return await m.answer(
+        f"📎 *Ссылка на оплату:*\n{link['link']}\n\n"
+        f"После оплаты нажмите «✅ Я оплатил».",
+        reply_markup=kb_payment(),
+        parse_mode="Markdown"
+    )
+    
 @dp.message(AddEvent.pay_option, F.text == "✅ Я оплатил")
 async def ev_opt_paid(m: Message, state: FSMContext):
     data = await state.get_data()
     uuid = data.get("_pay_uuid")
-    opt = data.get("opt_type")
-    ev_id = data.get("opt_event_id")
-    if not (uuid and opt and ev_id):
-        return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
+
+    if not uuid:
+        return await m.answer("❌ Счёт не найден.", reply_markup=kb_payment())
+
     paid = await cc_is_paid(uuid)
     if not paid:
         return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
-    # применяем ТОП
+
+    pay = _load_payments()
+    info = pay.get(uuid)
+    if not info:
+        return await m.answer("❌ Ошибка: данные оплаты не найдены.")
+
+    ev_id = info["payload"]["event_id"]
+    days = info["payload"]["days"]
+
     events = _load_events()
     target = next((e for e in events if e["id"] == ev_id), None)
+
     if not target:
-        await state.clear()
         return await m.answer("❌ Событие не найдено.", reply_markup=kb_main())
+
+    # Активируем ТОП
     target["is_top"] = True
-    target["top_expire"] = (datetime.now() + timedelta(days=7)).isoformat()
+    target["top_expire"] = (datetime.now() + timedelta(days=days)).isoformat()
+
     _save_events(events)
-    await m.answer("✅ ТОП активирован на 7 дней!", reply_markup=kb_main())
+
     await state.clear()
+    return await m.answer(
+        f"🎉 ТОП активирован на *{days} дней*!",
+        reply_markup=kb_main(),
+        parse_mode="Markdown"
+    )
 
 @dp.message(AddEvent.pay_option, F.text == "⬅ Назад")
 async def ev_opt_back(m: Message, state: FSMContext):
@@ -755,10 +831,10 @@ async def ev_opt_back(m: Message, state: FSMContext):
 async def bnr_duration(m: Message, state: FSMContext):
     txt = m.text
 
-    # кнопка Назад
-    if txt == "⬅️ Назад":
-        await state.set_state(AddBanner.link)
-        return await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
+# Кнопка "Назад"
+if txt == "⬅️ Назад":
+    await state.set_state(AddBanner.link)
+    return await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
 
     durations = {
     "📅 1 день — $12": 12,
