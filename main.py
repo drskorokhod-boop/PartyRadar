@@ -1160,13 +1160,72 @@ async def banner_link(m: Message, state: FSMContext):
 
     link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
     await state.update_data(b_link=link)
-    await state.set_state(AddBanner.duration)
+    # === Новый шаг: выбор локации баннера (необязательно) ===
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-    await m.answer(
-        "⏳ Выберите срок показа баннера:",
-        reply_markup=kb_banner_duration()
+kb_banner_location = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📍 Отправить мою геолокацию", callback_data="bn_geo_my")],
+    [InlineKeyboardButton(text="🗺 Выбрать точку на карте", callback_data="bn_geo_point")],
+    [InlineKeyboardButton(text="Пропустить", callback_data="bn_geo_skip")],
+    [InlineKeyboardButton(text="⬅ Назад", callback_data="bn_geo_back")],
+])
+
+await m.answer(
+    "📍 Укажите локацию баннера (необязательно):\n"
+    "• можно отправить свою геолокацию,\n"
+    "• выбрать точку на карте,\n"
+    "• или пропустить этот шаг.",
+    reply_markup=kb_banner_location
+)
+await state.set_state("await_banner_geo")
+
+# === Обработчики выбора локации баннера ===
+
+@dp.callback_query(F.data == "bn_geo_my")
+async def banner_geo_my(cq: CallbackQuery, state: FSMContext):
+    await cq.message.edit_text(
+        "📍 Отправьте свою геолокацию.\n\n"
+        "Скрепка → Геопозиция → Точка на карте."
     )
+    await state.set_state("await_banner_geo_my")
+    await cq.answer()
+    
+@dp.callback_query(F.data == "bn_geo_point")
+async def banner_geo_point(cq: CallbackQuery, state: FSMContext):
+    await cq.message.edit_text("🗺 Отправьте *любую точку на карте*.")
+    await state.set_state("await_banner_geo_point")
+    await cq.answer()
 
+
+@dp.callback_query(F.data == "bn_geo_skip")
+async def banner_geo_skip(cq: CallbackQuery, state: FSMContext):
+    await state.update_data(b_lat=None, b_lon=None)
+    await state.set_state(AddBanner.duration)
+    await cq.message.edit_text("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
+    await cq.answer()
+
+
+@dp.callback_query(F.data == "bn_geo_back")
+async def banner_geo_back(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(AddBanner.link)
+    await cq.message.edit_text("🔗 Укажите ссылку (или «Пропустить»).")
+    await cq.answer()
+
+# === Обработка фактического получения локации ===
+
+@dp.message(StateFilter("await_banner_geo_my"), F.location)
+async def banner_geo_my_loc(m: Message, state: FSMContext):
+    await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
+    await state.set_state(AddBanner.duration)
+    await m.answer("📌 Локация сохранена.\n\nВыберите срок показа баннера:", reply_markup=kb_banner_duration())
+
+
+@dp.message(StateFilter("await_banner_geo_point"), F.location)
+async def banner_geo_point_loc(m: Message, state: FSMContext):
+    await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
+    await state.set_state(AddBanner.duration)
+    await m.answer("📌 Точка на карте сохранена.\n\nВыберите срок показа баннера:", reply_markup=kb_banner_duration())
+    
 @dp.message(AddBanner.duration)
 async def banner_duration(m: Message, state: FSMContext):
     if m.text == "⬅️ Назад":
