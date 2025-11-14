@@ -343,10 +343,10 @@ def kb_upsell():
 
 def kb_banner_duration():
     rows = [
-        [KeyboardButton(text="📅 1 день"), KeyboardButton(text="📅 3 дня")],
-        [KeyboardButton(text="📅 7 дней"), KeyboardButton(text="📅 14 дней")],
-        [KeyboardButton(text="📅 30 дней")],
-        [KeyboardButton(text="⬅ Назад")]
+        [KeyboardButton(text="📅 1 день — $12"), KeyboardButton(text="📅 3 дня — $28")],
+        [KeyboardButton(text="📅 7 дней — $55"), KeyboardButton(text="📅 14 дней — $99")],
+        [KeyboardButton(text="📅 30 дней — $180")],
+        [KeyboardButton(text="⬅️ Назад")]
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 # ===================== TEXT HELPERS =====================
@@ -750,6 +750,39 @@ async def ev_opt_paid(m: Message, state: FSMContext):
 async def ev_opt_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.upsell)
     await m.answer("Выберите дополнительную опцию:", reply_markup=kb_upsell())
+    # ============================ БАННЕР: ВЫБОР СРОКА ============================
+@dp.message_handler(state=AddBanner.duration)
+async def bnr_duration(m: Message, state: FSMContext):
+    txt = m.text
+
+    # кнопка Назад
+    if txt == "⬅️ Назад":
+        await state.set_state(AddBanner.link)
+        return await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
+
+    durations = {
+    "📅 1 день — $12": 12,
+    "📅 3 дня — $28": 28,
+    "📅 7 дней — $55": 55,
+    "📅 14 дней — $99": 99,
+    "📅 30 дней — $180": 180
+}
+
+    if txt not in durations:
+        return await m.answer("Выберите один из вариантов:", reply_markup=kb_banner_duration())
+
+    await state.update_data(duration=durations[txt])
+
+    await state.set_state(AddBanner.payment)
+    await m.answer(
+    "📣 *Баннер — премиум-реклама на главном экране бота.*\n"
+    "Его видят *все пользователи* при нажатии кнопки Start.\n\n"
+    f"Вы выбрали: {txt}\n"
+    "Теперь оплатите баннер.\n"
+    "Нажмите кнопку «Получить ссылку на оплату».",
+    reply_markup=kb_payment(),
+    parse_mode="Markdown"
+)
 
 async def publish_event(m: Message, data: dict, hours: int):
     media_files = data.get("media_files", [])
