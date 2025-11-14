@@ -827,19 +827,20 @@ async def ev_pay_check(m: Message, state: FSMContext):
         await m.answer("⭐ Ваше событие поднято в ТОП!")
 
     # --- BANNER ---
-    elif opt == "banner":
-        banners = _load_banners()
-        banners.append({
-            "id": int(datetime.now().timestamp()),
-            "user_id": m.from_user.id,
-            "description": data.get("description"),
-            "media": data.get("media"),
-            "expire": data.get("banner_expire")
-        })
-        _save_banners(banners)
-        await m.answer("📣 Баннер загружен и появится на главном экране!")
-        # если выбрана Push-рассылка
-                if data.get("opt_type") == "push":
+elif opt == "banner":
+    banners = _load_banners()
+    banners.append({
+        "id": int(datetime.now().timestamp()),
+        "user_id": m.from_user.id,
+        "description": data.get("description"),
+        "media": data.get("media"),
+        "expire": data.get("banner_expire")
+    })
+    _save_banners(banners)
+    await m.answer("📡 Баннер загружен и появится на главном экране!")
+
+    # если выбрана Push-рассылка
+    if data.get("opt_type") == "push":
         users = _load_users()
         sent = 0
         errors = 0
@@ -862,7 +863,7 @@ async def ev_pay_check(m: Message, state: FSMContext):
             a = sin(dlat/2)**2 + cos(radians(lat0)) * cos(radians(lat1)) * sin(dlon/2)**2
             return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 
-        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.") 
+        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
 @dp.message(AddEvent.payment, F.text == "← Назад")
 async def ev_pay_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.lifetime)
