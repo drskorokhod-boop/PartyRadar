@@ -828,8 +828,8 @@ async def ev_pay_check(m: Message, state: FSMContext):
 
     # --- BANNER ---
     elif opt == "banner":
-    banners = _load_banners()
-    banners.append({
+      banners = _load_banners()
+      banners.append({
         "id": int(datetime.now().timestamp()),
         "user_id": m.from_user.id,
         "description": data.get("description"),
@@ -837,15 +837,13 @@ async def ev_pay_check(m: Message, state: FSMContext):
         "expire": data.get("banner_expire")
     })
     _save_banners(banners)
-    await m.answer("📡 Баннер загружен и появится на главном экране!")
+    await m.answer("🎉 Баннер загружен и появится на главном экране!")
 
-    # если выбрана Push-рассылка
     if data.get("opt_type") == "push":
         users = _load_users()
         sent = 0
         errors = 0
 
-        # координаты автора события или последнего местоположения
         my_loc = users.get(str(m.from_user.id), {}).get("last_location")
         if not my_loc:
             return await m.answer(
