@@ -827,7 +827,7 @@ async def ev_pay_check(m: Message, state: FSMContext):
         await m.answer("⭐ Ваше событие поднято в ТОП!")
 
     # --- BANNER ---
-elif opt == "banner":
+    elif opt == "banner":
     banners = _load_banners()
     banners.append({
         "id": int(datetime.now().timestamp()),
