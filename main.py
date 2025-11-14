@@ -897,12 +897,10 @@ async def ev_upsell(m: Message, state: FSMContext):
         )
 
         return await m.answer(
-            f"⭐ TOP на {days} дней\n\nСтоимость: ${price}\n\nНажмите «Получить ссылку на оплату».",
-            reply_markup=kb_payment(),
         )
 
     return await m.answer("Выберите опцию из меню.", reply_markup=kb_upsell())
-@dp.message(AddEvent.pay_option, F.text == "💳 Получить ссылку на оплату")
+@dp.message_handler(AddEvent.pay_option, F.text == "💳 Получить ссылку на оплату")
 async def ev_opt_link(m: Message, state: FSMContext):
     data = await state.get_data()
     opt_type = data.get("opt_type")
@@ -910,45 +908,45 @@ async def ev_opt_link(m: Message, state: FSMContext):
     days = data.get("opt_days")
 
     if not (opt_type and ev_id):
-        return await m.answer("❌ Опция не выбрана.", reply_markup=kb_upsell())
+        return await m.answer("✖️ Опция не выбрана.", reply_markup=kb_upsell())
 
     # Выбор правильного прайс-листа
-if opt_type == "top":
-    price = TOP_PRICES.get(days)
+    if opt_type == "top":
+        price = TOP_PRICES.get(days)
+    elif opt_type == "banner":
+        price = BANNER_PRICES.get(days)
+    elif opt_type == "push":
+        price = PUSH_PRICE_USD
+    else:
+        return await m.answer("✖️ Ошибка: неизвестный тип услуги.", reply_markup=kb_upsell())
 
-elif opt_type == "banner":
-    price = BANNER_PRICES.get(days)
-
-elif opt_type == "push":
-    price = PUSH_PRICE_USD
-
-else:
-    return await m.answer("❌ Ошибка: неизвестный тип услуги.", reply_markup=kb_upsell())
-
-if not price:
-    return await m.answer("❌ Ошибка: цена не найдена.", reply_markup=kb_upsell())
+    if not price:
+        return await m.answer("✖️ Ошибка: цена не найдена.", reply_markup=kb_upsell())
 
     order_id = f"{opt_type}_{ev_id}_{int(datetime.now().timestamp())}"
-    link = await cc_create_invoice(price, order_id, f"PartyRadar ТОП {days} дней")
+    link = await create_invoice(price, order_id, f"PartyRadar TOP на {days} дней")
 
     if not link:
-        return await m.answer("❌ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
+        return await m.answer(
+            "✖️ Не удалось получить ссылку. Проверь .env ключи.",
+            reply_markup=kb_payment()
+        )
 
     pay = _load_payments()
     pay[link["uuid"]] = {
-        "type": "event_top",
+        "type": opt_type,
         "user_id": m.from_user.id,
-        "payload": {"event_id": ev_id, "days": days}
+        "payload": {"event_id": ev_id, "days": days},
     }
     _save_payments(pay)
 
-    await state.update_data(_pay_uuid=link["uuid"])
+    await state.update_data(pay_uuid=link["uuid"])
 
     return await m.answer(
-        f"📎 *Ссылка на оплату:*\n{link['link']}\n\n"
-        f"После оплаты нажмите «✅ Я оплатил».",
+        f"💳 Ссылка на оплату:\n{link['link']}\n\n"
+        "После оплаты нажмите «✅ Я оплатил».",
         reply_markup=kb_payment(),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
     
 @dp.message(AddEvent.pay_option, F.text == "✅ Я оплатил")
