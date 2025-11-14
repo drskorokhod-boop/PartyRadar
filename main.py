@@ -283,7 +283,7 @@ def kb_back():
         keyboard=[[KeyboardButton(text="⬅ Назад")]],
         resize_keyboard=True
     )
-    def kb_skip_back():
+def kb_skip_back():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="➡️ Пропустить"), KeyboardButton(text="⬅ Назад")]
