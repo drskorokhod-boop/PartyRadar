@@ -309,7 +309,6 @@ def kb_main():
         keyboard=[
             [KeyboardButton(text="📍 Найти события рядом")],
             [KeyboardButton(text="➕ Создать событие")],
-            [KeyboardButton(text="🖼 Купить баннер")],
             [KeyboardButton(text="📩 Связаться с нами")]
         ],
         resize_keyboard=True
@@ -372,7 +371,6 @@ def kb_upsell():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="⭐ Продвижение ТОП")],
-            [KeyboardButton(text="📢 Баннер на главной")],
             [KeyboardButton(text="📨 Push-рассылка (30 км)")],
             [KeyboardButton(text="🌍 Разместить бесплатно (без опций)")],
             [KeyboardButton(text="← Назад")]
@@ -389,28 +387,6 @@ async def upsell_top(m: Message, state: FSMContext):
     await state.set_state(AddEvent.pay_option)
 
 
-@dp.message(F.text == "📛 Баннер на главной")
-async def upsell_banner(m: Message, state: FSMContext):
-    # === Глобальный лимит максимум 3 активных баннера ===
-    banners = _load_banners()
-    now_ts = int(datetime.now().timestamp())
-
-    active_banners = [
-        b for b in banners
-        if b.get("banner_expire", 0) > now_ts
-    ]
-
-    if len(active_banners) >= 3:
-        return await m.answer(
-            "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
-            "Подождите, пока один из баннеров истечёт, или удалите вручную.",
-            reply_markup=kb_main()
-        )
-
-    # Если лимит не превышен — продолжаем
-    await state.update_data(opt_type="banner")
-    await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
-    await state.set_state(AddBanner.link)
 
 
 @dp.message(F.text == "📣 Push-рассылка (30 км)")
