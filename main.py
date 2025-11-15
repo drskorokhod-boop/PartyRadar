@@ -380,16 +380,16 @@ def kb_upsell():
         resize_keyboard=True
     )
 
-# =================== UPSSELL HANDLERS ===================
+# ==================== UPSELL HANDLERS ====================
 
-@dp.message_handler(lambda m: m.text == "⭐ Продвижение ТОП", state="*")
+@dp.message(F.text == "⭐ Продвижение ТОП")
 async def upsell_top(m: Message, state: FSMContext):
     await state.update_data(opt_type="top")
     await m.answer("Выберите срок действия ТОПа:", reply_markup=kb_top_duration())
     await state.set_state(AddEvent.pay_option)
 
 
-@dp.message_handler(lambda m: m.text == "📣 Баннер на главной", state="*")
+@dp.message(F.text == "📣 Баннер на главной")
 async def upsell_banner(m: Message, state: FSMContext):
 
     # === Глобальный лимит максимум 3 активных баннера ===
@@ -402,32 +402,28 @@ async def upsell_banner(m: Message, state: FSMContext):
     ]
 
     if len(active_banners) >= 3:
-       return await m.answer(
-        "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
-        "Подождите, пока один из баннеров истечёт, или удалите вручную.",
-        reply_markup=kb_main()
-    )
+        return await m.answer(
+            "❌ Доступно максимум 3 активных баннера одновременно.\n\n"
+            "Подождите, пока один из баннеров истечёт, или удалите вручную.",
+            reply_markup=kb_main()
+        )
 
-    # Если лимит не превышен — продолжаем
+    # Продолжаем
     await state.update_data(opt_type="banner")
-    await m.answer(
-        "Отправьте ссылку для баннера:",
-        reply_markup=kb_back()
-    )
+    await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
     await state.set_state(AddBanner.link)
 
 
-@dp.message_handler(lambda m: m.text == "📡 Push-рассылка (30 км)", state="*")
+@dp.message(F.text == "📬 Push-рассылка (30 км)")
 async def upsell_push(m: Message, state: FSMContext):
     await state.update_data(opt_type="push")
     await m.answer(
         f"Push-рассылка уведомлений всем пользователям радиусом 30 км.\n\n"
         f"Стоимость: ${PUSH_PRICE_USD}\n\n"
-        f"Нажмите «Получить ссылку на оплату».",
+        "Нажмите «Получить ссылку на оплату».",
         reply_markup=kb_payment()
     )
     await state.set_state(AddEvent.payment)
-
 def kb_banner_duration():
     rows = [
         [KeyboardButton(text="📅 1 день — $12"), KeyboardButton(text="📅 3 дня — $28")],
