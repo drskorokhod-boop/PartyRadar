@@ -938,7 +938,9 @@ async def ev_opt_link(m: Message, state: FSMContext):
     )
 
 
-@dp.message@dp.message(AddEvent.pay_option, F.text == "✅ Я оплатил")
+from aiogram.filters import StateFilter
+
+@dp.message(StateFilter(AddEvent.pay_option), F.text == "💳 Я оплатил")
 async def ev_opt_paid(m: Message, state: FSMContext):
     data = await state.get_data()
     uuid = data.get("_pay_uuid")
