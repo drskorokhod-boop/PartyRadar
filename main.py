@@ -66,12 +66,6 @@ PRICES = {
     "extend_week": 3.0,
     "extend_2week": 5.0,
     "top_week": 5.0,
-
-    "banner_1d": 7.0,
-    "banner_3d": 15.0,
-    "banner_7d": 30.0,
-    "banner_14d": 50.0,
-    "banner_30d": 90.0,
 }
 
 # Цены для ТОП-продвижения
@@ -96,14 +90,6 @@ TARIFFS_USD = {  # для событий
     336: PRICES["extend_2week"]
 }
 
-# Сроки баннеров
-BANNER_DURATIONS = {
-    "📆 1 день": (1, PRICES["banner_1d"]),
-    "📆 3 дня": (3, PRICES["banner_3d"]),
-    "📆 7 дней": (7, PRICES["banner_7d"]),
-    "📆 14 дней": (14, PRICES["banner_14d"]),
-    "📆 30 дней": (30, PRICES["banner_30d"]),
-}
 
 # ===================== STORAGE HELPERS =====================
 def _load_json(path: str, default):
@@ -131,33 +117,7 @@ def _load_banners() -> List[dict]:
 def _save_banners(data: List[dict]):
     _save_json(BANNERS_FILE, data)
 
-# === AUTO CLEANUP OF EXPIRED BANNERS ===
 
-import asyncio
-from datetime import datetime
-
-async def cleanup_banners():
-    banners = _load_banners()
-    now = datetime.utcnow().timestamp()
-
-    # Фильтруем только актуальные баннеры
-    active = [b for b in banners if b.get("expires_at", 0) > now]
-
-    if len(active) != len(banners):
-        removed = len(banners) - len(active)
-        print(f"[CLEANUP] Удалено {removed} истёкших баннеров")
-        _save_banners(active)
-
-    return len(active)
-
-async def banner_cleanup_scheduler():
-    while True:
-        try:
-            await cleanup_banners()
-        except Exception as e:
-            print("[CLEANUP ERROR]", e)
-
-        await asyncio.sleep(300)  # каждые 5 минут
 def _load_users() -> Dict[str, dict]:
     return _load_json(USERS_FILE, {})
 
@@ -913,125 +873,6 @@ async def search_with_location(m: Message):
             ])
             await m.answer(txt, reply_markup=ikb)
 
-# ===================== БАННЕРЫ =====================
-@dp.message(F.text == "🖼 Купить баннер")
-async def banner_start(m: Message, state: FSMContext):
-    # проверка свободных слотов не нужна (баннеры в ротации максимум 3 отображаются, а храниться могут больше)
-    await state.set_state(AddBanner.media)
-    await m.answer(
-        "🖼 Загрузка баннера.\nПришлите <b>фото или видео</b> баннера.\n"
-        "Текст и ссылку добавим далее. Геолокацию можно указать для кнопки «Показать на карте».",
-        reply_markup=kb_back()
-    )
-
-@dp.message(AddBanner.media, F.content_type == ContentType.PHOTO)
-async def banner_media_photo(m: Message, state: FSMContext):
-    await state.update_data(b_media={"type": "photo", "file_id": m.photo[-1].file_id})
-    await state.set_state(AddBanner.description)
-    await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_back())
-
-@dp.message(AddBanner.media, F.content_type == ContentType.VIDEO)
-async def banner_media_video(m: Message, state: FSMContext):
-    await state.update_data(b_media={"type": "video", "file_id": m.video.file_id})
-    await state.set_state(AddBanner.description)
-    await m.answer("📝 Добавьте описание (или «Пропустить»).", reply_markup=kb_back())
-
-@dp.message(AddBanner.media)
-async def banner_media_wrong(m: Message, state: FSMContext):
-    if m.text == "⬅ Назад":
-        await state.clear()
-        return await m.answer("Главное меню:", reply_markup=kb_main())
-    await m.answer("⚠ Пришлите фото или видео баннера.", reply_markup=kb_back())
-
-@dp.message(AddBanner.description)
-async def bnr_desc(m: Message, state: FSMContext):
-    if m.text == "⬅️ Назад":
-        await state.set_state(AddBanner.media)
-        return await m.answer(
-            "📸 Пришлите фото или видео баннера.",
-            reply_markup=kb_back(),
-        )
-
-    text = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
-    await state.update_data(b_text=text)
-    await state.set_state(AddBanner.link)
-
-    return await m.answer(
-        "🌐 Теперь укажите ссылку, по которой пользователи смогут связаться с вами.\n"
-        "Это может быть:\n"
-        "- сайт\n"
-        "- Instagram/TikTok\n"
-        "- Telegram\n"
-        "- WhatsApp\n"
-        "- e-mail\n\n"
-        "Или напишите «Пропустить».",
-        reply_markup=kb_skip_back(),
-    )
-
-
-@dp.message(AddBanner.link)
-async def banner_link(m: Message, state: FSMContext):
-    if m.text == "⬅️ Назад":
-        await state.set_state(AddBanner.description)
-        return await m.answer(
-            "📝 Добавьте описание (или «Пропустить»).",
-            reply_markup=kb_skip_back(),
-        )
-
-    link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
-    await state.update_data(b_link=link)
-
-    # === Новый шаг: выбор локации баннера (необязательно) ===
-
-    await m.answer(
-        "📍 Укажите локацию баннера (необязательно):\n"
-        "- можно отправить свою геолокацию,\n"
-        "- выбрать точку на карте,\n"
-        "- или пропустить этот шаг.",
-        reply_markup=kb_banner_location()(),
-    )
-
-    await state.set_state("await_banner_geo")
-
-
-# === Обработчики выбора локации баннера ===
-
-
-@dp.callback_query(F.data == "bn_geo_my")
-async def banner_geo_my(cq: CallbackQuery, state: FSMContext):
-    await cq.message.edit_text(
-        "📍 Отправьте свою геолокацию.\n\n"
-        "📎 Скрепка – Геолокация – Точка на карте."
-    )
-    await state.set_state("await_banner_geo_my")
-    await state.set_state("await_banner_geo_my")
-    await cq.answer()
-    
-@dp.callback_query(F.data == "bn_geo_point")
-async def banner_geo_point(cq: CallbackQuery, state: FSMContext):
-    await cq.message.edit_text("🗺 Отправьте *любую точку на карте*.")
-    await state.set_state("await_banner_geo_point")
-    await cq.answer()
-
-
-@dp.callback_query(F.data == "bn_geo_skip")
-async def banner_geo_skip(cq: CallbackQuery, state: FSMContext):
-    await state.update_data(b_lat=None, b_lon=None)
-    await state.set_state(AddBanner.duration)
-    await cq.message.edit_text("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
-    await cq.answer()
-
-
-@dp.callback_query(F.data == "bn_geo_back")
-async def banner_geo_back(cq: CallbackQuery, state: FSMContext):
-    # Возврат на шаг ссылки
-    await state.set_state(AddBanner.link)
-
-    await cq.message.edit_text(
-        "🔗 Укажите ссылку (или «Пропустить»).",
-        reply_markup=kb_skip_back()
-    )
-
 
 # ===================== ПУШ-ДЕЙМОНЫ =====================
 async def push_daemon():
@@ -1069,80 +910,6 @@ async def push_daemon():
             if changed:
                 _save_events(events)
 
-            # Баннеры
-            banners = _load_banners()
-            b_changed = False
-            for b in banners:
-                exp = _safe_dt(b.get("expire"))
-                if not exp or b.get("notified"):
-                    continue
-                if timedelta(0) < (exp - now) <= timedelta(hours=PUSH_LEAD_HOURS):
-                    b["notified"] = True
-                    b_changed = True
-                    # кнопки продления баннера — те же сроки
-                    kb = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="📆 +1 день", callback_data=f"extend_bn:{b['id']}:1")],
-                        [InlineKeyboardButton(text="📆 +3 дня", callback_data=f"extend_bn:{b['id']}:3")],
-                        [InlineKeyboardButton(text="📆 +7 дней", callback_data=f"extend_bn:{b['id']}:7")],
-                        [InlineKeyboardButton(text="📆 +14 дней", callback_data=f"extend_bn:{b['id']}:14")],
-                        [InlineKeyboardButton(text="📆 +30 дней", callback_data=f"extend_bn:{b['id']}:30")]
-                    ])
-                    try:
-                        await bot.send_message(b["owner"], "⏳ Срок показа баннера заканчивается. Продлить?", reply_markup=kb)
-                    except Exception:
-                        pass
-            if b_changed:
-                _save_banners(banners)
-
-        except Exception as e:
-            logging.exception(f"push_daemon error: {e}")
-        await asyncio.sleep(300)
-
-@dp.callback_query(F.data.startswith("extend_ev:"))
-async def cb_extend_event(cq: CallbackQuery):
-    try:
-        _, ev_id, hours = cq.data.split(":")
-        ev_id = int(ev_id); hours = int(hours)
-        amount = TARIFFS_USD.get(hours)
-        if not amount:
-            return await cq.answer("Тариф не найден", show_alert=True)
-        order_id = f"extend_event_{ev_id}_{cq.from_user.id}_{hours}_{int(datetime.now().timestamp())}"
-        link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar event extend {hours}h")
-        if not link:
-            return await cq.answer("Не удалось создать счёт", show_alert=True)
-        # save pending
-        pay = _load_payments()
-        pay[uuid] = {"type": "event_extend", "user_id": cq.from_user.id, "payload": {"event_id": ev_id, "hours": hours}}
-        _save_payments(pay)
-        await cq.message.answer(f"💳 Ссылка на оплату продления:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».")
-        await cq.answer()
-    except Exception:
-        await cq.answer("Ошибка", show_alert=True)
-
-@dp.callback_query(F.data.startswith("extend_bn:"))
-async def cb_extend_banner(cq: CallbackQuery):
-    try:
-        _, b_id, days = cq.data.split(":")
-        b_id = int(b_id); days = int(days)
-        # найти цену
-        amount = None
-        for _, (d, a) in BANNER_DURATIONS.items():
-            if d == days:
-                amount = a
-                break
-        if amount is None:
-            return await cq.answer("Тариф не найден", show_alert=True)
-        order_id = f"extend_banner_{b_id}_{cq.from_user.id}_{days}_{int(datetime.now().timestamp())}"
-        link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar banner extend {days}d")
-        if not link:
-            return await cq.answer("Не удалось создать счёт", show_alert=True)
-        pay = _load_payments()
-        pay[uuid] = {"type": "banner_extend", "user_id": cq.from_user.id, "payload": {"banner_id": b_id, "days": days}}
-        _save_payments(pay)
-        await cq.message.answer(f"💳 Ссылка на оплату продления баннера:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».")
-        await cq.answer()
-    except Exception:
-        await cq.answer("Ошибка", show_alert=True)
 
 # ===================== ВЕБХУК ДЛЯ CRYPTOCLOUD =====================
 # Ожидается, что Render отдаёт порт в PORT
@@ -1204,43 +971,6 @@ async def handle_payment_callback(request: web.Request):
                 target["top_expire"] = (datetime.now() + timedelta(days=7)).isoformat()
                 _save_events(events)
                 await bot.send_message(user_id, "✅ ТОП активирован на 7 дней!")
-        elif t == "banner_buy":
-            d = payload
-            media = d.get("b_media")
-            if media:
-                text = d.get("b_text")
-                link = d.get("b_link")
-                lat = d.get("b_lat")
-                lon = d.get("b_lon")
-                days = d.get("b_days", 1)
-
-                banners = _load_banners()
-                new_id = (banners[-1]["id"] + 1) if banners else 1
-                expire = datetime.now() + timedelta(days=days)
-                banners.append({
-                    "id": new_id,
-                    "owner": user_id,
-                    "media_type": media["type"],
-                    "file_id": media["file_id"],
-                    "text": text,
-                    "link": link,
-                    "lat": lat,
-                    "lon": lon,
-                    "expire": expire.isoformat(),
-                    "notified": False
-                })
-                _save_banners(banners)
-                await bot.send_message(user_id, "✅ Баннер активирован и будет показан пользователям.")
-        elif t == "banner_extend":
-            b_id = payload["banner_id"]; days = int(payload["days"])
-            banners = _load_banners()
-            b = next((x for x in banners if x["id"] == b_id), None)
-            if b:
-                exp = _safe_dt(b.get("expire")) or datetime.now()
-                b["expire"] = (max(exp, datetime.now()) + timedelta(days=days)).isoformat()
-                b["notified"] = False
-                _save_banners(banners)
-                await bot.send_message(user_id, "✅ Баннер продлён!")
         # удаляем запись о платеже
         pay.pop(uuid, None)
         _save_payments(pay)
