@@ -435,17 +435,6 @@ def format_event_card(ev: dict, with_distance: Optional[float] = None) -> str:
         f"📅 {dt.strftime('%d.%m.%Y %H:%M')}{contact}{dist}"
     )
 
-def format_banner_caption(b: dict) -> str:
-    parts = []
-    if b.get("text"):
-        parts.append(sanitize(b["text"]))
-    if b.get("link"):
-        parts.append(f"🔗 {sanitize(b['link'])}")
-    if b.get("lat") is not None and b.get("lon") is not None:
-        g = f"https://www.google.com/maps?q={b['lat']},{b['lon']}"
-        parts.append(f"🗺 <a href=\"{g}\">Показать на карте</a>")
-    return "\n".join(parts) if parts else "Рекламный баннер"
-
 async def send_event_media(chat_id: int, ev: dict):
     text = format_event_card(ev)
     gmap = f"https://www.google.com/maps?q={ev['lat']},{ev['lon']}"
@@ -475,14 +464,6 @@ async def send_event_media(chat_id: int, ev: dict):
     else:
         await bot.send_message(chat_id, text, reply_markup=ikb)
 
-async def send_banner(chat_id: int, b: dict):
-    cap = format_banner_caption(b)
-    if b.get("media_type") == "photo" and b.get("file_id"):
-        await bot.send_photo(chat_id, b["file_id"], caption=cap, parse_mode="HTML")
-    elif b.get("media_type") == "video" and b.get("file_id"):
-        await bot.send_video(chat_id, b["file_id"], caption=cap, parse_mode="HTML")
-    else:
-        await bot.send_message(chat_id, cap, parse_mode="HTML")
 
 # ===================== START / WELCOME =====================
 async def send_logo_then_welcome(m: Message):
@@ -774,42 +755,7 @@ async def ev_pay_check(m: Message, state: FSMContext):
         _save_events(events)
         await m.answer("⭐ Ваше событие поднято в ТОП!")
 
-    # --- BANNER ---
-    elif opt == "banner":
-      banners = _load_banners()
-      banners.append({
-        "id": int(datetime.now().timestamp()),
-        "user_id": m.from_user.id,
-        "description": data.get("description"),
-        "media": data.get("media"),
-        "expire": data.get("banner_expire")
-    })
-    _save_banners(banners)
-    await m.answer("🎉 Баннер загружен и появится на главном экране!")
-
-    if data.get("opt_type") == "push":
-        users = _load_users()
-        sent = 0
-        errors = 0
-
-        my_loc = users.get(str(m.from_user.id), {}).get("last_location")
-        if not my_loc:
-            return await m.answer(
-                "❌ Не найдено ваше местоположение для вычисления радиуса.",
-                reply_markup=kb_main()
-            )
-
-        lat0, lon0 = my_loc["lat"], my_loc["lon"]
-
-        def distance(lat1, lon1):
-            from math import radians, sin, cos, sqrt, atan2
-            R = 6371
-            dlat = radians(lat1 - lat0)
-            dlon = radians(lon1 - lon0)
-            a = sin(dlat/2)**2 + cos(radians(lat0)) * cos(radians(lat1)) * sin(dlon/2)**2
-            return R * 2 * atan2(sqrt(a), sqrt(1 - a))
-
-        await m.answer("⏳ Оплата ещё не прошла. Попробуйте через минуту.")
+    
 @dp.message(AddEvent.payment, F.text == "← Назад")
 async def ev_pay_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.lifetime)
@@ -904,92 +850,6 @@ async def ev_opt_paid(m: Message, state: FSMContext):
 async def ev_opt_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.upsell)
     await m.answer("Выберите дополнительную опцию:", reply_markup=kb_upsell())
-# ======================= БАННЕР: ВЫБОР ССЫЛКИ И СРОКА =================
-
-@dp.message(StateFilter(AddBanner.link))
-async def bnr_link(m: Message, state: FSMContext):
-    txt = m.text
-
-    if txt == "⬅️ Назад":
-        await state.set_state(AddBanner.duration)
-        return await m.answer(
-            "Выберите срок баннера:",
-            reply_markup=kb_banner_duration(),
-        )
-
-    await state.update_data(link=txt)
-    await state.set_state(AddBanner.payment)
-    return await m.answer(
-        "📎 Получить ссылку на оплату",
-        reply_markup=kb_banner_payment(),
-    )
-
-
-@dp.message(StateFilter(AddBanner.duration))
-async def bnr_duration(m: Message, state: FSMContext):
-    txt = m.text
-
-    if txt == "⬅️ Назад":
-        await state.set_state(AddBanner.link)
-        return await m.answer(
-            "Отправьте ссылку для баннера:",
-            reply_markup=kb_back(),
-        )
-
-    durations = {
-        "1 день – $12": 12,
-        "7 дней – $28": 28,
-        "14 дней – $55": 55,
-        "30 дней – $180": 180,
-    }
-
-    if txt not in durations:
-        return await m.answer(
-            "Выберите один из вариантов:",
-            reply_markup=kb_banner_duration(),
-        )
-
-    await state.update_data(duration=durations[txt])
-    await state.set_state(AddBanner.payment)
-
-    return await m.answer(
-        "📣 Баннер в премиум-разделе на главном экране бота.\n\n"
-        f"Вы выбрали: {txt}\n\n"
-        "Теперь оплатите баннер.\n"
-        "Нажмите кнопку «Получить ссылку на оплату».",
-        reply_markup=kb_banner_payment(),
-        parse_mode="Markdown",
-    )    
-
-async def publish_event(m: Message, data: dict, hours: int):
-    media_files = data.get("media_files", [])
-    if not media_files:
-        # подставим лого как заглушку
-        for ext in ("png", "jpg", "jpeg"):
-            p = f"logo.{ext}"
-            if os.path.exists(p):
-                media_files = [{"type": "photo", "file_id": p, "is_local": True}]
-                break
-    events = _load_events()
-    expires = datetime.now() + timedelta(hours=hours)
-    new_id = (events[-1]["id"] + 1) if events else 1
-    ev = {
-        "id": new_id,
-        "author": m.from_user.id,
-        "title": data["title"],
-        "description": data.get("description"),
-        "category": data["category"],
-        "datetime": data["datetime"],
-        "lat": data.get("lat"),
-        "lon": data.get("lon"),
-        "media_files": media_files,
-        "contact": data.get("contact"),
-        "expire": expires.isoformat(),
-        "notified": False,
-        "is_top": False,
-        "top_expire": None
-    }
-    _save_events(events + [ev])
 
 # ===================== ПОИСК СОБЫТИЙ =====================
 @dp.message(F.text == "📍 Найти события рядом")
@@ -1172,119 +1032,6 @@ async def banner_geo_back(cq: CallbackQuery, state: FSMContext):
         reply_markup=kb_skip_back()
     )
 
-    await cq.answer()
-
-# === Обработка фактического получения локации ===
-
-@dp.message(StateFilter("await_banner_geo_my"), F.location)
-async def banner_geo_my_loc(m: Message, state: FSMContext):
-    await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
-    await state.set_state(AddBanner.duration)
-    await m.answer("📌 Локация сохранена.\n\nВыберите срок показа баннера:", reply_markup=kb_banner_duration())
-
-
-@dp.message(StateFilter("await_banner_geo_point"), F.location)
-async def banner_geo_point_loc(m: Message, state: FSMContext):
-    await state.update_data(b_lat=m.location.latitude, b_lon=m.location.longitude)
-    await state.set_state(AddBanner.duration)
-    await m.answer("📌 Точка на карте сохранена.\n\nВыберите срок показа баннера:", reply_markup=kb_banner_duration())
-    
-@dp.message(AddBanner.duration)
-async def banner_duration(m: Message, state: FSMContext):
-    if m.text == "⬅️ Назад":
-        await state.set_state(AddBanner.link)
-        return await m.answer("🔗 Укажите ссылку (или «Пропустить»).", reply_markup=kb_back())
-
-    if m.text not in BANNER_DURATIONS:
-        return await m.answer("Выберите один из вариантов:", reply_markup=kb_banner_duration())
-
-    days, amount = BANNER_DURATIONS[m.text]
-    await state.update_data(b_days=days, _pay_uuid=None)
-    await state.set_state(AddBanner.payment)
-
-    desc = (
-        "<b>📢 Баннер</b>\n"
-        "Можно разместить: картинку/видео, текст, ссылку.\n"
-        "Баннер показывается всем пользователям после приветствия (в ротации до 3 шт.).\n\n"
-        f"📅 Срок показа: {days} дн.\n"
-        f"💵 Стоимость: ${amount}\n\n"
-        "Нажмите ➜ «📎 Получить ссылку на оплату»."
-    )
-    await m.answer(desc, reply_markup=kb_payment())
-
-@dp.message(AddBanner.payment, F.text == "💳 Получить ссылку на оплату")
-async def banner_pay_link(m: Message, state: FSMContext):
-    data = await state.get_data()
-    days = data.get("b_days")
-    if not days:
-        return await m.answer("❌ Срок не выбран.", reply_markup=kb_banner_duration())
-    amount = None
-    for k, (d, a) in BANNER_DURATIONS.items():
-        if d == days:
-            amount = a
-            break
-    if amount is None:
-        return await m.answer("❌ Тариф не найден.", reply_markup=kb_banner_duration())
-
-    order_id = f"banner_{m.from_user.id}_{int(datetime.now().timestamp())}_{days}"
-    link, uuid = await cc_create_invoice(amount, order_id, f"PartyRadar banner {days}d")
-    if not link:
-        return await m.answer("⚠ Не удалось получить ссылку. Проверь .env ключи.", reply_markup=kb_payment())
-
-    # save pending
-    pay = _load_payments()
-    pay[uuid] = {"type": "banner_buy", "user_id": m.from_user.id, "payload": data}
-    _save_payments(pay)
-
-    await state.update_data(_pay_uuid=uuid)
-    await m.answer(f"💳 Ссылка на оплату:\n{link}\n\nПосле оплаты нажмите «✅ Я оплатил».", reply_markup=kb_payment())
-
-@dp.message(AddBanner.payment, F.text == "✅ Я оплатил")
-async def banner_paid(m: Message, state: FSMContext):
-    data = await state.get_data()
-    uuid = data.get("_pay_uuid")
-    if not uuid:
-        return await m.answer("❌ Счёт не найден. Получите ссылку ещё раз.", reply_markup=kb_payment())
-    paid = await cc_is_paid(uuid)
-    if not paid:
-        return await m.answer("❌ Оплата не найдена. Подождите минуту и попробуйте снова.", reply_markup=kb_payment())
-
-    # публикуем баннер
-    d = await state.get_data()
-    media = d.get("b_media")
-    if not media:
-        return await m.answer("❌ Медиа не найдено. Начните заново.", reply_markup=kb_main())
-
-    text = d.get("b_text")
-    link = d.get("b_link")
-    lat = d.get("b_lat")
-    lon = d.get("b_lon")
-    days = d.get("b_days", 1)
-
-    banners = _load_banners()
-    new_id = (banners[-1]["id"] + 1) if banners else 1
-    expire = datetime.now() + timedelta(days=days)
-    banners.append({
-        "id": new_id,
-        "owner": m.from_user.id,
-        "media_type": media["type"],
-        "file_id": media["file_id"],
-        "text": text,
-        "link": link,
-        "lat": lat,
-        "lon": lon,
-        "expire": expire.isoformat(),
-        "notified": False
-    })
-    _save_banners(banners)
-
-    await state.clear()
-    await m.answer("✅ Баннер активирован и будет показан пользователям после приветствия.", reply_markup=kb_main())
-
-@dp.message(AddBanner.payment, F.text == "⬅ Назад")
-async def banner_pay_back(m: Message, state: FSMContext):
-    await state.set_state(AddBanner.duration)
-    await m.answer("⏳ Выберите срок показа баннера:", reply_markup=kb_banner_duration())
 
 # ===================== ПУШ-ДЕЙМОНЫ =====================
 async def push_daemon():
