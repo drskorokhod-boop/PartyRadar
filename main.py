@@ -295,13 +295,6 @@ class AddEvent(StatesGroup):
     top_days = State()        # выбор длительности TOP
     push_confirm = State()    # подтверждение PUSH-рассылки
 
-class AddBanner(StatesGroup):
-    media = State()
-    description = State()
-    link = State()
-    duration = State()
-    payment = State()
-    extend = State()
 
 # ===================== KEYBOARDS =====================
 def kb_main():
@@ -400,45 +393,6 @@ async def upsell_push(m: Message, state: FSMContext):
     )
     await state.set_state(AddEvent.payment)
 
-def kb_banner_location():
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📍 Отправить мою геолокацию",
-                    callback_data="bn_geo_my",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📍 Выбрать точку на карте",
-                    callback_data="bn_geo_point",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="➡️ Пропустить",
-                    callback_data="bn_geo_skip",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data="bn_geo_back",
-                )
-            ],
-        ]
-    )
-
-def kb_banner_duration():
-    rows = [
-        [KeyboardButton(text="📅 1 день — $12"), KeyboardButton(text="📅 3 дня — $28")],
-        [KeyboardButton(text="📅 7 дней — $55"), KeyboardButton(text="📅 14 дней — $99")],
-        [KeyboardButton(text="📅 30 дней — $180")],
-        [KeyboardButton(text="⬅️ Назад")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 
@@ -452,15 +406,6 @@ def kb_top_duration():
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
     
 # ======== ПЛАТНЫЕ ТАРИФЫ ========
-
-# Тарифы баннера (цены в USD)
-BANNER_PRICES = {
-    "📅 1 день – $12": 12,
-    "📅 3 дня – $25": 25,
-    "📅 7 дней – $35": 35,
-    "📅 14 дней – $70": 70,
-    "📅 30 дней – $180": 180,
-}
 
 # Тарифы TOP (цены в USD)
 TOP_PRICES = {
