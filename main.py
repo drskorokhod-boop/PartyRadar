@@ -1172,62 +1172,96 @@ async def banner_media_wrong(m: Message, state: FSMContext):
     await m.answer("⚠ Пришлите фото или видео баннера.", reply_markup=kb_back())
 
 @dp.message(AddBanner.description)
-async def banner_desc(m: Message, state: FSMContext):
+async def bnr_desc(m: Message, state: FSMContext):
     if m.text == "⬅️ Назад":
         await state.set_state(AddBanner.media)
-        return await m.answer("📸 Пришлите фото или видео баннера.", reply_markup=kb_back())
+        return await m.answer(
+            "📸 Пришлите фото или видео баннера.",
+            reply_markup=kb_back(),
+        )
 
     text = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
     await state.update_data(b_text=text)
     await state.set_state(AddBanner.link)
 
-    await m.answer(
-        "🔗 Теперь укажите ссылку, по которой пользователи смогут связаться с вами.\n"
+    return await m.answer(
+        "🌐 Теперь укажите ссылку, по которой пользователи смогут связаться с вами.\n"
         "Это может быть:\n"
-        "• сайт\n"
-        "• Instagram/TikTok\n"
-        "• Telegram\n"
-        "• WhatsApp\n"
-        "• e-mail\n\n"
-        "Или нажмите «Пропустить».",
-        reply_markup=kb_skip_back()
+        "- сайт\n"
+        "- Instagram/TikTok\n"
+        "- Telegram\n"
+        "- WhatsApp\n"
+        "- e-mail\n\n"
+        "Или напишите «Пропустить».",
+        reply_markup=kb_skip_back(),
     )
+
 
 @dp.message(AddBanner.link)
 async def banner_link(m: Message, state: FSMContext):
     if m.text == "⬅️ Назад":
         await state.set_state(AddBanner.description)
-        return await m.answer("✏️ Добавьте описание (или «Пропустить».", reply_markup=kb_skip_back())
+        return await m.answer(
+            "📝 Добавьте описание (или «Пропустить»).",
+            reply_markup=kb_skip_back(),
+        )
 
     link = None if m.text.lower().strip() == "пропустить" else sanitize(m.text)
     await state.update_data(b_link=link)
+
     # === Новый шаг: выбор локации баннера (необязательно) ===
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-kb_banner_location = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="📍 Отправить мою геолокацию", callback_data="bn_geo_my")],
-    [InlineKeyboardButton(text="🗺 Выбрать точку на карте", callback_data="bn_geo_point")],
-    [InlineKeyboardButton(text="Пропустить", callback_data="bn_geo_skip")],
-    [InlineKeyboardButton(text="⬅ Назад", callback_data="bn_geo_back")],
-])
+    kb_banner_location = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📍 Отправить мою геолокацию",
+                    callback_data="bn_geo_my",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📍 Выбрать точку на карте",
+                    callback_data="bn_geo_point",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="➡️ Пропустить",
+                    callback_data="bn_geo_skip",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="bn_geo_back",
+                )
+            ],
+        ]
+    )
 
-await m.answer(
-    "📍 Укажите локацию баннера (необязательно):\n"
-    "• можно отправить свою геолокацию,\n"
-    "• выбрать точку на карте,\n"
-    "• или пропустить этот шаг.",
-    reply_markup=kb_banner_location
-)
-await state.set_state("await_banner_geo")
+    await m.answer(
+        "📍 Укажите локацию баннера (необязательно):\n"
+        "- можно отправить свою геолокацию,\n"
+        "- выбрать точку на карте,\n"
+        "- или пропустить этот шаг.",
+        reply_markup=kb_banner_location,
+    )
+
+    await state.set_state("await_banner_geo")
+
 
 # === Обработчики выбора локации баннера ===
+
 
 @dp.callback_query(F.data == "bn_geo_my")
 async def banner_geo_my(cq: CallbackQuery, state: FSMContext):
     await cq.message.edit_text(
         "📍 Отправьте свою геолокацию.\n\n"
-        "Скрепка → Геопозиция → Точка на карте."
+        "📎 Скрепка – Геолокация – Точка на карте."
     )
+    await state.set_state("await_banner_geo_my")
     await state.set_state("await_banner_geo_my")
     await cq.answer()
     
