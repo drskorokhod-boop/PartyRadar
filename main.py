@@ -382,16 +382,15 @@ def kb_upsell():
 
 # ==================== UPSELL HANDLERS ====================
 
-@dp.message(F.text == "⭐ Продвижение ТОП")
+@dp.message_handler(lambda m: m.text == "⭐ Продвижение ТОП")
 async def upsell_top(m: Message, state: FSMContext):
     await state.update_data(opt_type="top")
     await m.answer("Выберите срок действия ТОПа:", reply_markup=kb_top_duration())
     await state.set_state(AddEvent.pay_option)
 
 
-@dp.message(F.text == "📣 Баннер на главной")
+@dp.message_handler(lambda m: m.text == "📛 Баннер на главной")
 async def upsell_banner(m: Message, state: FSMContext):
-
     # === Глобальный лимит максимум 3 активных баннера ===
     banners = _load_banners()
     now_ts = int(datetime.now().timestamp())
@@ -408,17 +407,17 @@ async def upsell_banner(m: Message, state: FSMContext):
             reply_markup=kb_main()
         )
 
-    # Продолжаем
+    # Если лимит не превышен — продолжаем
     await state.update_data(opt_type="banner")
     await m.answer("Отправьте ссылку для баннера:", reply_markup=kb_back())
     await state.set_state(AddBanner.link)
 
 
-@dp.message(F.text == "📬 Push-рассылка (30 км)")
+@dp.message_handler(lambda m: m.text == "📣 Push-рассылка (30 км)")
 async def upsell_push(m: Message, state: FSMContext):
     await state.update_data(opt_type="push")
     await m.answer(
-        f"Push-рассылка уведомлений всем пользователям радиусом 30 км.\n\n"
+        "Push-рассылка уведомлений всем пользователям радиусом 30 км.\n\n"
         f"Стоимость: ${PUSH_PRICE_USD}\n\n"
         "Нажмите «Получить ссылку на оплату».",
         reply_markup=kb_payment()
