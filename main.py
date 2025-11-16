@@ -370,6 +370,12 @@ def kb_lifetime():
             [KeyboardButton(text="🕐 1 день (бесплатно)")],
             [KeyboardButton(text="⏱ 3 дня — $1.5"), KeyboardButton(text="⏱ 7 дней — $3.0")],
             [KeyboardButton(text="⏱ 30 дней — $6.0")],
+
+            # === ДОПОЛНИТЕЛЬНЫЕ ОПЦИИ ДО ПУБЛИКАЦИИ ===
+            [KeyboardButton(text="⭐ ТОП-продвижение")],
+            [KeyboardButton(text="📣 Push-рассылка")],
+            [KeyboardButton(text="🖼 Баннер")],
+
             [KeyboardButton(text="⬅ Назад")]
         ],
         resize_keyboard=True
@@ -980,6 +986,21 @@ async def ev_contact(m: Message, state: FSMContext):
 @dp.message(AddEvent.lifetime)
 async def ev_lifetime(m: Message, state: FSMContext):
     if m.text == "⬅ Назад":
+    if m.text == "⭐ ТОП-продвижение":
+        await state.set_state(AddEvent.top_days)
+        await state.update_data(pre_option="top")
+        return await m.answer("Выбери срок ТОП-продвижения:", reply_markup=kb_top_duration())
+     if m.text == "📣 Push-рассылка":
+        await state.update_data(pre_option="push")
+        await state.set_state(AddEvent.pay_option)
+        return await m.answer(
+            f"📣 Push отправится всем пользователям в радиусе 30 км.\nЦена: ${PUSH_PRICE_USD}\n\nНажми «💳 Получить ссылку на оплату».",
+            reply_markup=kb_payment()
+        )
+     if m.text == "🖼 Баннер":
+        await state.update_data(pre_option="banner")
+        await state.set_state(AddBanner.duration)
+        return await m.answer("Выбери срок показа баннера:", reply_markup=kb_banner_duration())    
         await state.set_state(AddEvent.contact)
         return await m.answer("☎ Укажи контакт или напиши «Пропустить».", reply_markup=kb_back())
     if m.text not in LIFETIME_OPTIONS:
@@ -987,6 +1008,9 @@ async def ev_lifetime(m: Message, state: FSMContext):
     hours = LIFETIME_OPTIONS[m.text]
 
     data = await state.get_data()
+    # Если доп. опция уже выбрана — больше не даём выбирать
+    if "pre_option" in data and m.text in ["⭐ ТОП-продвижение", "📣 Push-рассылка", "🖼 Баннер"]:
+        return await m.answer("❗ Ты уже выбрал дополнительную опцию. Теперь выбери срок жизни объявления.", reply_markup=kb_lifetime())
     # Автоматическая модерация — перед любым размещением/оплатой
     ok, reason = check_event_moderation(data)
     if not ok:
@@ -1269,6 +1293,42 @@ async def ev_opt_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.upsell)
     await m.answer("Выберите дополнительную опцию:", reply_markup=kb_upsell())
 async def publish_event(m: Message, data: dict, hours: int):
+# === ДОПОЛНИТЕЛЬНЫЕ ОПЦИИ ДО ПУБЛИКАЦИИ ===
+    pre_opt = data.get("pre_option")
+    top_days = data.get("opt_days")
+    banner_data = data.get("banner_data")
+
+    # ТОП-продвижение
+    if pre_opt == "top" and top_days:
+        new_event["is_top"] = True
+        new_event["top_expire"] = (datetime.now() + timedelta(days=top_days)).isoformat()
+        new_event["top_paid_at"] = datetime.now().isoformat()
+
+    # Push-рассылка
+    if pre_opt == "push":
+        try:
+            await send_push_for_event(new_event)
+        except Exception as e:
+            print("PUSH ERROR:", e)
+
+    # Баннер
+    if pre_opt == "banner" and banner_data:
+        banners = _load_banners()
+        new_id = (banners[-1]["id"] + 1) if banners else 1
+        expire = datetime.now() + timedelta(days=banner_data["days"])
+        banners.append({
+            "id": new_id,
+            "owner": m.from_user.id,
+            "media_type": banner_data["media"]["type"],
+            "file_id": banner_data["media"]["file_id"],
+            "text": banner_data["text"],
+            "link": banner_data["link"],
+            "lat": banner_data.get("lat"),
+            "lon": banner_data.get("lon"),
+            "expire": expire.isoformat(),
+            "notified": False
+        })
+        _save_banners(banners)    
     media_files = data.get("media_files", [])
     if not media_files:
         # подставим лого как заглушку
