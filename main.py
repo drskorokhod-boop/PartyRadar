@@ -1,6 +1,6 @@
 # main.py
-# PartyRadar — монолитный бот на Aiogram 3.x + webhook (Render)
-# Требует: aiogram==3.x, aiohttp, python-dotenv, geopy, aiohttp
+# PartyRadar — монолитный бот на Aiogram 3.13.1 + webhook (Render)
+# Требует: aiogram==3.13.1, aiohttp, python-dotenv, geopy, pydantic
 
 import asyncio
 import json
@@ -8,11 +8,12 @@ import logging
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 
 import aiohttp
 from aiohttp import web
 from geopy.distance import geodesic
+from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
@@ -29,20 +30,20 @@ from aiogram.types import (
     InputMediaPhoto, InputMediaVideo,
 )
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from dotenv import load_dotenv
 
 # ===================== CONFIG =====================
 
 load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
-assert TOKEN, "❌ BOT_TOKEN отсутствует в .env"
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN not set")
 
 CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY", "").strip()
 CRYPTOCLOUD_SHOP_ID = os.getenv("CRYPTOCLOUD_SHOP_ID", "").strip()
 ADMIN_ID = int(os.getenv("ADMIN_ID") or 0)
 
-LOGO_URL = ""  # при желании можно указать URL логотипа
+LOGO_URL = ""  # при желании можешь указать URL логотипа
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("partyradar")
@@ -85,7 +86,7 @@ EXTEND_TARIFFS_USD = {
 # Сроки баннеров
 BANNER_DURATIONS = {
     "📅 1 день — $7":   (1, 7.0),
-    "📅 3 дня — $15":  (3, 15.0),
+    "📅 3 дня — $15":   (3, 15.0),
     "📅 7 дней — $30":  (7, 30.0),
     "📅 15 дней — $45": (15, 45.0),
     "📅 30 дней — $75": (30, 75.0),
@@ -852,8 +853,10 @@ async def ev_pay_link(m: Message, state: FSMContext):
     data = await state.get_data()
     total = data.get("payment_total", 0.0)
     if total <= 0:
-        return await m.answer("Сумма к оплате не определена. Попробуй вернуться и настроить опции заново.",
-                              reply_markup=kb_constructor(await build_constructor_summary(m.from_user.id, data)))
+        return await m.answer(
+            "Сумма к оплате не определена. Попробуй вернуться и настроить опции заново.",
+            reply_markup=kb_constructor(await build_constructor_summary(m.from_user.id, data))
+        )
 
     order_id = f"event_pack_{m.from_user.id}_{int(datetime.now().timestamp())}"
     link, uuid = await cc_create_invoice(total, order_id, "PartyRadar: пакет опций для события")
@@ -1391,6 +1394,7 @@ async def push_daemon():
 
         await asyncio.sleep(300)
 
+
 @dp.callback_query(F.data.startswith("ext_ev:"))
 async def cb_extend_event(cq: CallbackQuery):
     try:
@@ -1470,7 +1474,6 @@ async def on_startup(app: web.Application):
     if render_url:
         webhook_url = f"https://{render_url}/webhook"
     else:
-        # запасной вариант: если ты хочешь захардкодить домен:
         webhook_url = "https://partyradar.onrender.com/webhook"
 
     await bot.set_webhook(webhook_url)
@@ -1493,7 +1496,8 @@ def create_app() -> web.Application:
     app.on_shutdown.append(on_shutdown)
 
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
-    setup_application(app, dp, bot)
+    # ВАЖНО: для aiogram 3.13.1 — bot передаём КЛЮЧЕВЫМ аргументом
+    setup_application(app, dp, bot=bot)
     return app
 
 
