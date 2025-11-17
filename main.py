@@ -2004,6 +2004,7 @@ async def fallback(m: Message):
 async def make_web_app():
     try:
         app = web.Application()
+        app.router.add_get("/anypay-verification.txt", handle_anypay_verification)
 
         # Платёжные маршруты
         app.router.add_post("/payment_callback", handle_payment_callback)
