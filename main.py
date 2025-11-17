@@ -600,7 +600,7 @@ app.router.add_get('/anypay-verification.txt', handle_anypay_verification)
 # ================== TELEGRAM WEBHOOK ==================
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app)
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
 setup_application(app, dp)
 
 @dp.message(Command("start"))
