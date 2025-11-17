@@ -2006,8 +2006,7 @@ async def make_web_app():
     app.router.add_post("/payment_callback", handle_payment_callback)
     app.router.add_get("/payment_callback", handle_payment_callback)
 
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
-    return app
+    SimpleRequestHandler(dp, bot).register(app, "/webhook")
 
 
 async def on_startup():
