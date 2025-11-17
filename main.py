@@ -2002,11 +2002,26 @@ async def fallback(m: Message):
 # ===================== WEBHOOK / RUN =====================
 
 async def make_web_app():
-    app = web.Application()
-    app.router.add_post("/payment_callback", handle_payment_callback)
-    app.router.add_get("/payment_callback", handle_payment_callback)
+    try:
+        app = web.Application()
 
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
+        # Платёжные маршруты
+        app.router.add_post("/payment_callback", handle_payment_callback)
+        app.router.add_get("/payment_callback", handle_payment_callback)
+
+        # Вебхук Telegram
+        SimpleRequestHandler(dispatcher=dp, bot=bot).register(
+            app,
+            path="/webhook"
+        )
+
+        return app
+
+    except Exception as e:
+        logging.exception(f"❌ Ошибка make_web_app(): {e}")
+
+        # Всегда возвращаем пустой Application, чтобы AppRunner не падал
+        return web.Application()
 
 
 async def on_startup():
