@@ -29,7 +29,7 @@ from aiogram.types import (
 )
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from dotenv import load_dotenv
-
+from aiohttp import web
 # ===================== CONFIG =====================
 
 load_dotenv()
@@ -56,7 +56,7 @@ PAYMENTS_FILE = "payments.json"
 DEFAULT_RADIUS_KM = 30
 PUSH_LEAD_HOURS = 2
 MAX_ACTIVE_BANNERS = 3
-
+ANYPAY_VERIFICATION_TEXT = "0298a93952ce16ab5114a95d874d"
 # Тарифы (USD)
 TARIFFS_USD = {
     24: 1.0,    # используется для платного 1 дня, когда бесплатный лимит исчерпан
@@ -588,7 +588,20 @@ async def send_logo_then_welcome(m: Message):
         "Выбирай, что делаем 👇",
         reply_markup=kb_main()
     )
+    
+# ================== ANYPAY VERIFICATION FILE ==================
 
+async def handle_anypay_verification(request):
+    return web.Response(text=ANYPAY_VERIFICATION_TEXT, content_type='text/plain')
+
+app = web.Application()
+app.router.add_get('/anypay-verification.txt', handle_anypay_verification)
+
+# ================== TELEGRAM WEBHOOK ==================
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app)
+setup_application(app, dp)
 
 @dp.message(Command("start"))
 async def start_cmd(m: Message, state: FSMContext):
