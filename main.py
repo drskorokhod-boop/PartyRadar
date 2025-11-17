@@ -543,7 +543,7 @@ async def show_nearby_banner_for_user(m: Message):
 async def send_logo_then_welcome(m: Message):
     logo_path = None
     for ext in ("png", "jpg", "jpeg"):
-        p = f"logo.{ext}"
+        p = f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
         if os.path.exists(p):
             logo_path = p
             break
@@ -924,7 +924,7 @@ async def publish_event(m: Message, data: dict, hours: int, is_free: bool):
     if not media_files:
         # подставим логотип как заглушку
         for ext in ("png", "jpg", "jpeg"):
-            p = f"logo.{ext}"
+            p = f"imgonline-com-ua-Resize-poVtNXt7aue6.{ext}"
             if os.path.exists(p):
                 media_files = [{"type": "photo", "file_id": p, "is_local": True}]
                 break
