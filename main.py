@@ -1315,7 +1315,7 @@ async def ev_upsell(m: Message, state: FSMContext):
 
     await state.set_state(AddBanner.duration)
     await m.answer("Выбери срок показа баннера:", reply_markup=kb_banner_duration())
-return await m.answer("Выбери один из вариантов:", reply_markup=kb_upsell())
+    return await m.answer("Выбери один из вариантов:", reply_markup=kb_upsell())
 
 
 @dp.message(StateFilter(AddEvent.pay_option), F.text == "⬅ Назад")
