@@ -1274,49 +1274,47 @@ async def ev_upsell(m: Message, state: FSMContext):
         )
 
         media_files = current.get("media_files") or []
-b_media = None
+    b_media = None
 
-# Если есть своё медиа — используем его
-if media_files:
-    f = media_files[0]
-    b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+    # Если есть своё медиа — используем его
+    if media_files:
+        f = media_files[0]
+        b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+    else:
+        # Если медиа нет — вставляем логотип по умолчанию
+        try:
+            with open("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png", "rb") as img:
+                sent = await m.bot.send_photo(m.chat.id, img, caption="")
+                if sent.photo:
+                    b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
+                else:
+                    b_media = None
 
-else:
-    # Если медиа нет — вставляем логотип по умолчанию
-    try:
-        with open("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png", "rb") as img:
-            sent = await m.bot.send_photo(m.chat.id, img, caption="")
+            # Удаляем сообщение, нам нужен только file_id
+            await m.bot.delete_message(m.chat.id, sent.message_id)
 
-        if sent.photo:
-            b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
-        else:
+        except Exception as e:
+            print("Ошибка вставки fallback баннера:", e)
             b_media = None
 
-        # Удаляем сообщение, нам нужен только file_id
-        await m.bot.delete_message(m.chat.id, sent.message_id)
+    parts = []
+    if current.get("title"):
+        parts.append(sanitize(current["title"]))
+    if current.get("description"):
+        parts.append(sanitize(current["description"]))
 
-    except Exception as e:
-        print("Ошибка вставки fallback баннера:", e)
-        b_media = None
+    b_text = "\n\n".join(parts) if parts else None
 
-parts = []
-if current.get("title"):
-    parts.append(sanitize(current["title"]))
-if current.get("description"):
-    parts.append(sanitize(current["description"]))
+    await state.update_data(
+        b_media=b_media,
+        b_text=b_text,
+        b_link=current.get("contact"),
+        b_lat=current.get("lat"),
+        b_lon=current.get("lon"),
+    )
 
-b_text = "\n\n".join(parts) if parts else None
-
-await state.update_data(
-    b_media=b_media,
-    b_text=b_text,
-    b_link=current.get("contact"),
-    b_lat=current.get("lat"),
-    b_lon=current.get("lon"),
-)
-
-await state.set_state(AddBanner.duration)
-await m.answer("Выбери срок показа баннера:", reply_markup=kb_banner_duration())
+    await state.set_state(AddBanner.duration)
+    await m.answer("Выбери срок показа баннера:", reply_markup=kb_banner_duration())
 return await m.answer("Выбери один из вариантов:", reply_markup=kb_upsell())
 
 
