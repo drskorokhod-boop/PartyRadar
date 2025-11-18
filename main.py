@@ -355,11 +355,11 @@ def kb_payment():
 def kb_upsell():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="⭐ Продвижение ТОП":)],
+            [KeyboardButton(text="⭐ Продвижение ТОП")],
             [KeyboardButton(text="📣 Push-рассылка (30 км)")],
             [KeyboardButton(text="🖼 Баннер (премиум)")],
             [KeyboardButton(text="🌍 Оставить без доп.опций")],
-            [KeyboardButton(text="⬅ Назад")],
+            [KeyboardButton(text="⬅️ Назад")],
         ],
         resize_keyboard=True
     )
