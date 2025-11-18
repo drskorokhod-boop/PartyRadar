@@ -1274,13 +1274,13 @@ async def ev_upsell(m: Message, state: FSMContext):
         )
 
         media_files = current.get("media_files") or []
-        b_media = None
+b_media = None
 
-        # Если есть своё медиа — используем его
-        if media_files:
-            f = media_files[0]
-            b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
-        else:
+# Если есть своё медиа — используем его
+if media_files:
+    f = media_files[0]
+    b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+else:
     # Если медиа нет — вставляем логотип по умолчанию
     try:
         with open("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png", "rb") as img:
@@ -1289,6 +1289,13 @@ async def ev_upsell(m: Message, state: FSMContext):
                 b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
             else:
                 b_media = None
+
+            # Удаляем сообщение, нам нужен только file_id
+            await m.bot.delete_message(m.chat.id, sent.message_id)
+
+    except Exception as e:
+        print("Ошибка вставки fallback баннера:", e)
+        b_media = None
 
             # Удаляем сообщение, но file_id уже получен
             await m.bot.delete_message(m.chat.id, sent.message_id)
