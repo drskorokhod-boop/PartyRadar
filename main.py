@@ -1283,7 +1283,7 @@ async def ev_upsell(m: Message, state: FSMContext):
         else:
             # Если медиа нет — вставляем логотип по умолчанию
             try:
-                with open("assets/imgonline-com-ua-Resize-poVTNk17aue6.png", "rb") as img:
+                with open("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png", "rb") as img:
                     sent = await m.bot.send_photo(m.chat.id, img, caption="")
                     b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
                     await m.bot.delete_message(m.chat.id, sent.message_id)
