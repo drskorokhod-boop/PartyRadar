@@ -1262,7 +1262,7 @@ if txt == "⭐ Продвижение ТОП":
             reply_markup=kb_payment()
         )
 
-    # Баннер
+   # Баннер
     if txt == "🖼 Баннер (премиум)":
         events = _load_events()
         user_events = [e for e in events if int(e.get("author", 0)) == int(m.from_user.id)]
@@ -1272,32 +1272,34 @@ if txt == "⭐ Продвижение ТОП":
 
         current = user_events[-1]
         await m.answer(
-        "🖼 <b>Баннер (премиум)</b> — крупный баннер твоего события, который показывается вверху экрана после приветствия у пользователей поблизости при нажатии кнопки start.\n"
-        "Отлично подходит для вечеринок, концертов, открытий и любых крупных мероприятий, когда нужно максимальное внимание.\n"
+            "🖼 <b>Баннер (премиум)</b> — крупный баннер твоего события, который показывается наверху экрана после приветствия у пользователей рядом.\n"
+            "Отлично подходит для вечеринок, концертов, открытий и любых крупных мероприятий, когда нужно максимальное внимание.\n"
         )
-        media_files = current.get("media_files") or []
-b_media = None
 
-# Если есть своё медиа — используем его
-if media_files:
-    f = media_files[0]
-    b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
-else:
-    # Если медиа нет — вставляем логотип по умолчанию
-    try:
-        with open("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png", "rb") as img:
-            sent = await m.bot.send_photo(m.chat.id, img, caption="")
-            b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
-            await m.bot.delete_message(m.chat.id, sent.message_id)
-    except Exception as e:
-        print("Ошибка вставки fallback баннера:", e)
+        media_files = current.get("media_files") or []
         b_media = None
 
-parts = []
-if current.get("title"):
-    parts.append(sanitize(current["title"]))
-if current.get("description"):
-    parts.append(sanitize(current["description"]))
+        # Если есть своё медиа — используем его
+        if media_files:
+            f = media_files[0]
+            b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+        else:
+            # Если медиа нет — вставляем логотип по умолчанию
+            try:
+                with open("assets/imgonline-com-ua-Resize-poVTNk17aue6.png", "rb") as img:
+                    sent = await m.bot.send_photo(m.chat.id, img, caption="")
+                    b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
+                    await m.bot.delete_message(m.chat.id, sent.message_id)
+            except Exception as e:
+                print("Ошибка вставки fallback баннера:", e)
+                b_media = None
+
+        parts = []
+        if current.get("title"):
+            parts.append(sanitize(current["title"]))
+        if current.get("description"):
+            parts.append(sanitize(current["description"]))
+
         b_text = "\n\n".join(parts) if parts else None
 
         await state.update_data(
