@@ -1218,12 +1218,26 @@ async def ev_upsell(m: Message, state: FSMContext):
             reply_markup=kb_main()
         )
 
-    # Выбор ТОПа → показываем сроки ТОП
-    if txt == "⭐ Продвижение ТОП":
-        await state.update_data(opt_type="top", opt_event_id=None, opt_days=None, _pay_uuid=None)
-        await m.answer("Выбери срок ТОП-продвижения:", reply_markup=kb_top_duration())
-        await state.set_state(AddEvent.pay_option)
-        return
+    # Выбор ТОПа – показываем сроки ТОП
+if txt == "⭐ Продвижение ТОП":
+    await m.answer(
+        "⭐ <b>ТОП-продвижение</b> — поднимает твоё событие в начало списка, делая его заметным для всех пользователей.\n"
+        "Это помогает быстрее собрать просмотры и отклики.\n"
+    )
+
+    await state.update_data(
+        opt_type="top",
+        opt_event_id=None,
+        opt_days=None,
+        _pay_uuid=None
+    )
+
+    await state.set_state(AddEvent.pay_option)
+
+    return await m.answer(
+        "Выбери срок ТОП-продвижения:",
+        reply_markup=kb_top_duration()
+    )
 
     # Push
     if txt == "📣 Push-рассылка (30 км)":
@@ -1257,17 +1271,33 @@ async def ev_upsell(m: Message, state: FSMContext):
             return await m.answer("❌ У тебя пока нет событий для баннера.", reply_markup=kb_main())
 
         current = user_events[-1]
+        await m.answer(
+        "🖼 <b>Баннер (премиум)</b> — крупный баннер твоего события, который показывается вверху экрана после приветствия у пользователей поблизости при нажатии кнопки start.\n"
+        "Отлично подходит для вечеринок, концертов, открытий и любых крупных мероприятий, когда нужно максимальное внимание.\n"
+        )
         media_files = current.get("media_files") or []
-        b_media = None
-        if media_files:
-            f = media_files[0]
-            b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+b_media = None
 
-        parts = []
-        if current.get("title"):
-            parts.append(sanitize(current["title"]))
-        if current.get("description"):
-            parts.append(sanitize(current["description"]))
+# Если есть своё медиа — используем его
+if media_files:
+    f = media_files[0]
+    b_media = {"type": f.get("type"), "file_id": f.get("file_id")}
+else:
+    # Если медиа нет — вставляем логотип по умолчанию
+    try:
+        with open("assets/banner_default.jpg", "rb") as img:
+            sent = await m.bot.send_photo(m.chat.id, img, caption="")
+            b_media = {"type": "photo", "file_id": sent.photo[-1].file_id}
+            await m.bot.delete_message(m.chat.id, sent.message_id)
+    except Exception as e:
+        print("Ошибка вставки fallback баннера:", e)
+        b_media = None
+
+parts = []
+if current.get("title"):
+    parts.append(sanitize(current["title"]))
+if current.get("description"):
+    parts.append(sanitize(current["description"]))
         b_text = "\n\n".join(parts) if parts else None
 
         await state.update_data(
