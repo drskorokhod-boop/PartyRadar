@@ -752,7 +752,7 @@ async def ev_cat(m: Message, state: FSMContext):
         )
 
     # Поздравления
-    if cat == "🎊 Поздравления":
+elif cat == "🎉 Поздравления":
         await state.update_data(price=None, media_files=[])
         await state.set_state(AddEvent.media)
         return await m.answer(
