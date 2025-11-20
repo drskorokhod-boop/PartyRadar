@@ -600,13 +600,16 @@ async def send_logo_then_welcome(m: Message):
         reply_markup=kb_main()
     )
     
-# ================== ANYPAY VERIFICATION FILE ==================
+# ================== UNITPAY VERIFICATION FILE ==================
 
-async def handle_anypay_verification(request):
-    return web.Response(text=ANYPAY_VERIFICATION_TEXT, content_type='text/plain')
+async def handle_unitpay_verification(request):
+    return web.Response(
+        text="25a558d08ef4438fbefddd2aae7fe5",
+        content_type="text/plain"
+    )
 
 app = web.Application()
-app.router.add_get('/anypay-verification.txt', handle_anypay_verification)
+app.router.add_get('/verification-25a55.txt', handle_unitpay_verification)
 
 # ================== TELEGRAM WEBHOOK ==================
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
