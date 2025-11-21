@@ -1589,6 +1589,6 @@ async def handle_payment_callback(request: web.Request):
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    from aiohttp import web
+    port = int(os.getenv("PORT", 8000))
+    web.run_app(app, host="0.0.0.0", port=port)
