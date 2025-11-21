@@ -347,6 +347,66 @@ async def send_logo_then_welcome(m: Message):
         reply_markup=kb_main()
     )
 
+
+async def send_banner_for_user(m: Message):
+    """Показывает один актуальный баннер рядом с пользователем (если есть)."""
+    users = _load_users()
+    me = next((u for u in users if u.get("user_id") == m.from_user.id), None)
+    if not me or me.get("lat") is None or me.get("lon") is None:
+        # Не знаем локацию пользователя — баннер по радиусу показать не можем
+        return
+
+    lat = me["lat"]
+    lon = me["lon"]
+
+    banners = _load_banners()
+    now = datetime.now()
+    active = []
+    for b in banners:
+        status = b.get("status", "active")
+        exp = _safe_dt(b.get("expire"))
+        if status == "expired":
+            continue
+        if exp and exp <= now:
+            continue
+        b_lat = b.get("lat")
+        b_lon = b.get("lon")
+        if b_lat is None or b_lon is None:
+            continue
+        dist = haversine(lat, lon, b_lat, b_lon)
+        if dist <= DEFAULT_RADIUS_KM:
+            b = dict(b)
+            b["distance"] = dist
+            active.append(b)
+
+    if not active:
+        return
+
+    # Берём самый близкий баннер
+    active.sort(key=lambda x: x.get("distance", 999999))
+    b = active[0]
+
+    text_parts = ["🖼 <b>Интересный баннер рядом</b>"]
+    if b.get("text"):
+        text_parts.append(b["text"])
+    if b.get("link"):
+        text_parts.append(f"🔗 {b['link']}")
+    caption = "\n\n".join(text_parts)
+
+    media_type = b.get("media_type")
+    file_id = b.get("file_id")
+
+    try:
+        if media_type == "photo" and file_id:
+            await m.answer_photo(file_id, caption=caption)
+        elif media_type == "video" and file_id:
+            await m.answer_video(file_id, caption=caption)
+        else:
+            await m.answer(caption)
+    except Exception as e:
+        logging.exception(f"Ошибка отправки баннера пользователю {m.from_user.id}: {e}")
+
+
 # ================== UNITPAY VERIFICATION FILE ==================
 
 async def handle_unitpay_verification(request):
@@ -369,6 +429,7 @@ setup_application(app, dp)
 async def start_cmd(m: Message, state: FSMContext):
     await state.clear()
     await send_logo_then_welcome(m)
+    await send_banner_for_user(m)
 
 
 @dp.message(Command("help"))
@@ -857,7 +918,7 @@ async def ev_upsell(m: Message, state: FSMContext):
     if txt == "⭐ Продвижение ТОП":
         await m.answer(
             "<b>⭐ТОП-продвижение</b> — поднимает твоё событие в начало списка, делая его заметным для всех пользователей.\n"
-            "Это помогает быстрее собрать просмотры и отклики!\n",
+            "Это помогает быстрее собрать просмотры и отклики!\n"
         )
 
         await state.update_data(
@@ -1512,8 +1573,8 @@ async def make_web_app():
 
         return app
     except Exception as e:
-        logging.exception(f"❌ Ошибка make_web_app(): {e}")
-        return web.Application()
+            logging.exception(f"❌ Ошибка make_web_app(): {e}")
+            return web.Application()
 
 
 async def handle_payment_callback(request: web.Request):
