@@ -2308,7 +2308,9 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logging.info("🛑 Server stopped manually")
-        @dp.message(StateFilter(AddEvent.contact), F.text == "⬅ Назад")
+
+
+@dp.message(StateFilter(AddEvent.contact), F.text == "⬅ Назад")
 async def ev_contact_back(m: Message, state: FSMContext):
     await state.set_state(AddEvent.media)
     await m.answer("🔙 Вернулись к выбору медиа.", reply_markup=kb_media())
