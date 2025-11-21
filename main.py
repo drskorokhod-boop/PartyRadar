@@ -326,7 +326,7 @@ def kb_skip():
 
 async def send_logo_then_welcome(m: Message):
     try:
-    await m.answer_photo(FSInputFile("imgonline-com-ua-Resize-poVtNXt7aue6.png")
+    await m.answer_photo(FSInputFile("imgonline-com-ua-Resize-poVtNXt7aue6.png"))
 except Exception:
     pass
         
