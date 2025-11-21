@@ -1,3 +1,4 @@
+from aiogram.types import FSInputFile
 import asyncio
 import json
 import logging
