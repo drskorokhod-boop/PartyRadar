@@ -80,7 +80,7 @@ if MOD_CHAT_ID:
     except ValueError:
         pass
 
-LOGO_URL = "https://telegra.ph/file/3c82eae5d8e754e665d59.png"
+LOGO_URL = ""
 
 
 def load_json(path: str, default):
@@ -326,8 +326,10 @@ def kb_skip():
 
 async def send_logo_then_welcome(m: Message):
     try:
-        if LOGO_URL:
-            await m.answer_photo(LOGO_URL)
+    await m.answer_photo(FSInputFile("assets/imgonline-com-ua-Resize-poVtNXt7aue6.png"))
+except Exception:
+    pass
+        
     except Exception:
         pass
 
