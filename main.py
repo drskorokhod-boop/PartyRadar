@@ -80,7 +80,7 @@ if MOD_CHAT_ID:
     except ValueError:
         pass
 
-LOGO_URL = ""
+FSInputFile("imgonline-com-ua-Resize-poVtNXt7aue6.png")
 
 
 def load_json(path: str, default):
