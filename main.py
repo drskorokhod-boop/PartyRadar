@@ -238,7 +238,6 @@ def _save_banners(data: List[dict]):
                 continue
             session.merge(BannerRow(id=b_id_int, payload=b))
 
-() -> List[dict]:
     return _load_json(BANNERS_FILE, [])
 
 
