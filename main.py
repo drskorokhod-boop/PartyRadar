@@ -1084,20 +1084,23 @@ async def ev_contact(m: Message, state: FSMContext):
 
 
 
-@dp.message(AddEvent.media)
+@dp.message(
+    AddEvent.media,
+    F.content_type == ContentType.TEXT,
+)
 async def ev_media_other(m: Message, state: FSMContext):
-    # Любой другой ввод на шаге медиа – не сбрасываем FSM,
-    # а ещё раз объясняем, что нужно сделать.
+
+    # Назад
+    if m.text == "⬅ Назад":
+        return await ev_media_back(m, state)
+
     await m.answer(
         "Сейчас мы на шаге медиа. Этот шаг нужен, чтобы прикрепить фото/видео "
         "или геолокацию к событию.\n\n"
-        "Если что-то пошло не так — нажми меню слева от строки ввода и выбери "
-        "«Перезапуск бота».\n\n"
-        "Отправь, пожалуйста, <b>фото/видео</b> или <b>геолокацию</b> места события.\n\n"
-        "Если планируешь делать баннер — медиа нужно загрузить именно здесь.",
+        "Отправь фото/видео или локацию.\n"
+        "Аудио и кружки не поддерживаются.",
         reply_markup=kb_media_step()
     )
-
 
 @dp.message(AddEvent.contact)
 async def ev_contact(m: Message, state: FSMContext):
