@@ -1431,9 +1431,8 @@ async def ev_pay_check(m: Message, state: FSMContext):
 
     await state.set_state(AddEvent.upsell)
     await m.answer(
-        "✅ Событие опубликовано!
+        "✅ Событие опубликовано!"
 
-"
         "Теперь можешь включить доп.опции для большего охвата:",
         reply_markup=kb_upsell()
     )
