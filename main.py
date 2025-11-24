@@ -1414,9 +1414,8 @@ async def ev_pay_check(m: Message, state: FSMContext):
     paid = await cc_is_paid(invoice_uuid)
     if not paid:
         return await m.answer(
-            "❌ Оплата пока не найдена.
+            "❌ Оплата пока не найдена."
 
-"
             "Если ты только что оплатил — подожди минуту и нажми ещё раз.",
             reply_markup=kb_payment()
         )
