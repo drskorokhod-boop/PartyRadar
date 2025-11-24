@@ -1737,9 +1737,8 @@ async def ev_opt_router(m: Message, state: FSMContext):
         if already_done:
             await state.set_state(AddEvent.upsell_more)
             return await m.answer(
-                "✅ Эта опция уже активирована для объявления.
+                "✅ Эта опция уже активирована для объявления."
 
-"
                 "Можешь выбрать ещё одну опцию:",
                 reply_markup=kb_upsell_more()
             )
@@ -1767,9 +1766,8 @@ async def ev_opt_router(m: Message, state: FSMContext):
             await state.update_data(opt_done=True)
             await state.set_state(AddEvent.upsell_more)
             return await m.answer(
-                f"🎉 ТОП активирован на {days} дней!
+                f"🎉 ТОП активирован на {days} дней!"
 
-"
                 "Добавить ещё одну опцию к этому объявлению?",
                 reply_markup=kb_upsell_more()
             )
@@ -1779,9 +1777,8 @@ async def ev_opt_router(m: Message, state: FSMContext):
             await state.update_data(opt_done=True)
             await state.set_state(AddEvent.upsell_more)
             return await m.answer(
-                f"📣 PUSH-рассылка отправлена. Получателей: {sent}.
+                f"📣 PUSH-рассылка отправлена. Получателей: {sent}."
 
-"
                 "Добавить ещё одну опцию к этому объявлению?",
                 reply_markup=kb_upsell_more()
             )    await m.answer("Выбери пункт из меню.", reply_markup=kb_upsell())
@@ -1920,9 +1917,8 @@ async def banner_paid(m: Message, state: FSMContext):
     if already_done:
         await state.set_state(AddEvent.upsell_more)
         return await m.answer(
-            "✅ Оплата этого баннера уже подтверждена.
+            "✅ Оплата этого баннера уже подтверждена."
 
-"
             "Добавить ещё одну опцию к этому объявлению?",
             reply_markup=kb_upsell_more()
         )
@@ -1970,9 +1966,8 @@ async def banner_paid(m: Message, state: FSMContext):
 
     await state.set_state(AddEvent.upsell_more)
     await m.answer(
-        "✅ Баннер активирован и будет показываться пользователям в твоём районе.
+        "✅ Баннер активирован и будет показываться пользователям в твоём районе."
 
-"
         "Добавить ещё одну опцию к этому объявлению?",
         reply_markup=kb_upsell_more()
     )@dp.message(AddBanner.payment, F.text == "⬅ Назад")
