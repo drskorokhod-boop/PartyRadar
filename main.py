@@ -1986,7 +1986,7 @@ async def banner_paid(m: Message, state: FSMContext):
 
     await state.set_state(AddEvent.upsell_more)
     await m.answer(
-        "✅ Баннер активирован и будет показываться пользователям в твоём районе.
+        "✅ Баннер активирован и будет показываться пользователям в твоём районе."
 
         "Добавить ещё одну опцию к этому объявлению?",
         reply_markup=kb_upsell_more()
