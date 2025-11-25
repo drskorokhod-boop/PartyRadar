@@ -1614,7 +1614,7 @@ async def ev_upsell(m: Message, state: FSMContext):
 @dp.message(StateFilter(AddEvent.pay_option), F.text == "⬅ Назад")
 async def ev_opt_back(m: Message, state: FSMContext):
     await state.clear()
-        await state.set_state(AddEvent.upsell)
+    await state.set_state(AddEvent.upsell)
     await m.answer("Выбери дополнительную опцию:\n\n"
         "ℹ️ Если что-то пошло не так — нажми меню слева от строки ввода и выбери «Перезапустить бота».", reply_markup=kb_upsell())
 
