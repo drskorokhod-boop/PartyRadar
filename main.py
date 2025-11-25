@@ -1446,7 +1446,7 @@ async def ev_pay_check(m: Message, state: FSMContext):
     await state.update_data(already_published=True, _pay_uuid=None)
 
     await state.clear()
-        await state.set_state(AddEvent.upsell)
+    await state.set_state(AddEvent.upsell)
     await m.answer(
         "✅ Событие опубликовано!"
 
