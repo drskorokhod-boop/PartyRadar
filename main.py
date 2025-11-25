@@ -1800,7 +1800,7 @@ async def ev_opt_router(m: Message, state: FSMContext):
 
                 "Добавить ещё одну опцию к этому объявлению?",
                 reply_markup=kb_upsell_more())
-            return await m.answer("Выбери пункт из меню.", reply_markup=kb_upsell())"
+            return await m.answer("Выбери пункт из меню.", reply_markup=kb_upsell())
 
 
 # ===================== БАННЕРЫ (АПСЕЛ) =====================
