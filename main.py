@@ -1424,7 +1424,7 @@ async def ev_pay_check(m: Message, state: FSMContext):
         )
 
     if not invoice_uuid or not hours:
-        return await m.answer("⚠️ Ошибка: не найден счёт или тариф.", reply_markup=kb_payment())"
+        return await m.answer("⚠️ Ошибка: не найден счёт или тариф.", reply_markup=kb_payment())
 
     await m.answer("🔍 Проверяю оплату...")
     paid = await cc_is_paid(invoice_uuid)
