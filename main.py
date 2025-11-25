@@ -1756,9 +1756,8 @@ async def ev_opt_router(m: Message, state: FSMContext):
         if already_done:
             await state.set_state(AddEvent.upsell_more)
             return await m.answer(
-                "✅ Эта опция уже активирована для объявления.
+                "✅ Эта опция уже активирована для объявления."
 
-"
                 "Можешь выбрать ещё одну опцию:",
                 reply_markup=kb_upsell_more()
             )
@@ -1786,9 +1785,8 @@ async def ev_opt_router(m: Message, state: FSMContext):
             await state.update_data(opt_done=True)
             await state.set_state(AddEvent.upsell_more)
             return await m.answer(
-                f"🎉 ТОП активирован на {days} дней!
+                f"🎉 ТОП активирован на {days} дней!"
 
-"
                 "Добавить ещё одну опцию к этому объявлению?",
                 reply_markup=kb_upsell_more()
             )
