@@ -1419,21 +1419,19 @@ async def ev_pay_check(m: Message, state: FSMContext):
         return await m.answer(
             "✅ Оплата уже подтверждена, событие опубликовано.
 
-"
             "Можешь выбрать дополнительные опции:",
             reply_markup=kb_upsell()
         )
 
     if not invoice_uuid or not hours:
-        return await m.answer("⚠️ Ошибка: не найден счёт или тариф.", reply_markup=kb_payment())
+        return await m.answer("⚠️ Ошибка: не найден счёт или тариф.", reply_markup=kb_payment())"
 
     await m.answer("🔍 Проверяю оплату...")
     paid = await cc_is_paid(invoice_uuid)
     if not paid:
         return await m.answer(
-            "❌ Оплата пока не найдена.
+            "❌ Оплата пока не найдена."
 
-"
             "Если ты только что оплатил — подожди минуту и нажми ещё раз.",
             reply_markup=kb_payment()
         )
@@ -1450,9 +1448,8 @@ async def ev_pay_check(m: Message, state: FSMContext):
     await state.clear()
         await state.set_state(AddEvent.upsell)
     await m.answer(
-        "✅ Событие опубликовано!
+        "✅ Событие опубликовано!"
 
-"
         "Теперь можешь включить доп.опции для большего охвата:",
         reply_markup=kb_upsell()
     )
@@ -1803,10 +1800,9 @@ async def ev_opt_router(m: Message, state: FSMContext):
             return await m.answer(
                 f"📣 PUSH-рассылка отправлена. Получателей: {sent}.
 
-"
                 "Добавить ещё одну опцию к этому объявлению?",
                 reply_markup=kb_upsell_more()
-            )    await m.answer("Выбери пункт из меню.", reply_markup=kb_upsell())
+            )    await m.answer("Выбери пункт из меню.", reply_markup=kb_upsell())"
 
 
 # ===================== БАННЕРЫ (АПСЕЛ) =====================
@@ -1943,9 +1939,8 @@ async def banner_paid(m: Message, state: FSMContext):
     if already_done:
         await state.set_state(AddEvent.upsell_more)
         return await m.answer(
-            "✅ Оплата этого баннера уже подтверждена.
+            "✅ Оплата этого баннера уже подтверждена."
 
-"
             "Добавить ещё одну опцию к этому объявлению?",
             reply_markup=kb_upsell_more()
         )
@@ -1995,13 +1990,12 @@ async def banner_paid(m: Message, state: FSMContext):
     await m.answer(
         "✅ Баннер активирован и будет показываться пользователям в твоём районе.
 
-"
         "Добавить ещё одну опцию к этому объявлению?",
         reply_markup=kb_upsell_more()
     )@dp.message(AddBanner.payment, F.text == "⬅ Назад")
 async def banner_pay_back(m: Message, state: FSMContext):
     await state.set_state(AddBanner.duration)
-    await m.answer("🔙 Вернулись к выбору срока размещения баннера:", reply_markup=kb_banner_duration())
+    await m.answer("🔙 Вернулись к выбору срока размещения баннера:", reply_markup=kb_banner_duration())"
 
 
 # ===================== ПОИСК СОБЫТИЙ =====================
