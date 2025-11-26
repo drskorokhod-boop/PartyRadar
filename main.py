@@ -1,6 +1,6 @@
 # main.py
 # PartyRadar — оптимизированная версия под aiogram 3.x
-
+print("VERSION: 2025-11-26 14:23 FIX3")
 import asyncio
 import json
 import logging
