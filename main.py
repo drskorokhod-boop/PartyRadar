@@ -1305,10 +1305,6 @@ async def ev_lifetime(m: Message, state: FSMContext):
 
         # бесплатное размещение
         ev = await publish_event(m, data, hours, is_free=True)
-        try:
-            await send_event_media(m.chat.id, ev)
-        except Exception:
-            await m.answer(format_event_card(ev))
 
         await state.set_state(AddEvent.upsell)
         return await m.answer(
